@@ -1,0 +1,29 @@
+{
+  "name": "ai-wa-fs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "element-plus": "^2.4.4",
+    "lucide-vue-next": "^0.294.0",
+    "pinia": "^2.1.7",
+    "vue": "^3.3.10",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "vite": "^5.0.5",
+    "vite-plugin-pwa": "^0.17.4"
+  },
+  "_EOF": {
+    "F": "AI-WA-FS/package.json",
+    "V": 1793078500,
+    "W": "ai-wa-fs-001"
+  }
+}
