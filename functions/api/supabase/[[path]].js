@@ -1,11 +1,22 @@
 export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
-  
-  // 1. 取得原本的請求路徑 (將 /api/supabase 替換掉)
+
+  // 1. 處理跨域預檢請求 (OPTIONS)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Max-Age': '86400',
+      }
+    });
+  }
+
+  // 2. 取得原本的請求路徑
   const targetPath = url.pathname.replace('/api/supabase', '');
-  
-  // 2. 組合真正的 Supabase 網址
   const targetUrl = 'https://vatdtxdgljowdwvwbzdmt.supabase.co' + targetPath + url.search;
 
   // 3. 建立新的請求轉發給 Supabase
@@ -16,20 +27,32 @@ export async function onRequest(context) {
   });
 
   try {
-    // 4. 發送請求並回傳結果
+    // 4. 發送請求
     const response = await fetch(newRequest);
-    return response;
+    
+    // 5. 建立新的 Response，並強制加上 CORS 標頭
+    const newResponse = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    });
+    
+    newResponse.headers.set('Access-Control-Allow-Origin', '*');
+    return newResponse;
+    
   } catch (error) {
-    // 如果連線失敗，回傳錯誤訊息
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   }
 }
 
 /* ═══ EOF ═══
 F: AI-WA-FS/functions/api/supabase/[[path]].js
-V: 1793805000
+V: 1793805100
 W: ai-wa-fs-001
 ═══ */
