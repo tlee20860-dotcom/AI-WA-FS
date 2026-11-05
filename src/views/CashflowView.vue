@@ -12,7 +12,15 @@
           class="month-picker"
         />
       </div>
-      <el-button type="primary" @click="openAddDialog" class="add-btn">+ 新增紀錄</el-button>
+      
+      <div class="header-actions">
+        <!-- 🆕 切換顯示模式 -->
+        <el-radio-group v-model="viewMode" class="view-toggle">
+          <el-radio-button label="table">表格</el-radio-button>
+          <el-radio-button label="kanban">看板</el-radio-button>
+        </el-radio-group>
+        <el-button type="primary" @click="openAddDialog">+ 新增紀錄</el-button>
+      </div>
     </div>
 
     <!-- 統計卡片 -->
@@ -31,12 +39,13 @@
       </el-col>
     </el-row>
 
-    <!-- 列表區 -->
+    <!-- 資料顯示區 -->
     <el-card shadow="never" class="list-card">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="支出紀錄" name="expense">
-          <!-- 加上 table-wrapper 讓手機可以橫向滑動 -->
-          <div class="table-wrapper">
+          
+          <!-- 模式一：表格視圖 -->
+          <div v-if="viewMode === 'table'" class="table-wrapper">
             <el-table :data="expenses" style="width: 100%; min-width: 600px;" stripe v-loading="loading">
               <el-table-column prop="name" label="項目名稱" min-width="150" />
               <el-table-column prop="payer_name" label="對象" width="100" />
@@ -55,15 +64,70 @@
                   <el-tag :type="scope.row.status === '已處理' ? 'success' : 'info'" size="small">{{ scope.row.status || '未處理' }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="80" align="center">
+              <el-table-column label="操作" width="120" align="center">
                 <template #default="scope">
+                  <el-button type="primary" link size="small" @click="toggleExpenseStatus(scope.row)">
+                    {{ scope.row.status === '已處理' ? '取消處理' : '標記處理' }}
+                  </el-button>
                   <el-button type="danger" text size="small" @click="deleteRecord('expenses', scope.row.id)">刪除</el-button>
                 </template>
               </el-table-column>
             </el-table>
           </div>
+
+          <!-- 模式二：看板視圖 -->
+          <div v-else class="kanban-wrapper" v-loading="loading">
+            <!-- 未處理區域 -->
+            <div class="kanban-column">
+              <div class="kanban-header pending">
+                未處理 <el-tag size="small" type="info">{{ pendingExpenses.length }}</el-tag>
+              </div>
+              <div class="kanban-list">
+                <el-card v-for="item in pendingExpenses" :key="item.id" class="kanban-card" shadow="hover">
+                  <div class="card-title-row">
+                    <span class="title">{{ item.name }}</span>
+                    <span class="amount text-red">HK$ {{ item.amount.toLocaleString() }}</span>
+                  </div>
+                  <div class="card-meta">
+                    <el-tag size="small" type="info">{{ item.category_name || '未分類' }}</el-tag>
+                    <span class="payer">{{ item.payer_name }}</span>
+                  </div>
+                  <div class="card-actions">
+                    <el-button type="primary" size="small" plain @click="toggleExpenseStatus(item)">標記已處理</el-button>
+                    <el-button type="danger" size="small" text @click="deleteRecord('expenses', item.id)">刪除</el-button>
+                  </div>
+                </el-card>
+                <el-empty v-if="pendingExpenses.length === 0" description="沒有未處理項目" :image-size="60" />
+              </div>
+            </div>
+
+            <!-- 已處理區域 -->
+            <div class="kanban-column">
+              <div class="kanban-header done">
+                已處理 <el-tag size="small" type="success">{{ doneExpenses.length }}</el-tag>
+              </div>
+              <div class="kanban-list">
+                <el-card v-for="item in doneExpenses" :key="item.id" class="kanban-card done-card" shadow="hover">
+                  <div class="card-title-row">
+                    <span class="title text-muted">{{ item.name }}</span>
+                    <span class="amount text-muted">HK$ {{ item.amount.toLocaleString() }}</span>
+                  </div>
+                  <div class="card-meta">
+                    <el-tag size="small" type="info">{{ item.category_name || '未分類' }}</el-tag>
+                    <span class="payer">{{ item.payer_name }}</span>
+                  </div>
+                  <div class="card-actions">
+                    <el-button type="info" size="small" plain @click="toggleExpenseStatus(item)">取消處理</el-button>
+                    <el-button type="danger" size="small" text @click="deleteRecord('expenses', item.id)">刪除</el-button>
+                  </div>
+                </el-card>
+                <el-empty v-if="doneExpenses.length === 0" description="沒有已處理項目" :image-size="60" />
+              </div>
+            </div>
+          </div>
         </el-tab-pane>
         
+        <!-- 收入維持表格，因為通常不需要處理狀態 -->
         <el-tab-pane label="收入紀錄" name="income">
           <div class="table-wrapper">
             <el-table :data="incomes" style="width: 100%; min-width: 400px;" stripe v-loading="loading">
@@ -85,17 +149,15 @@
       </el-tabs>
     </el-card>
 
-    <!-- 新增彈窗 -->
+    <!-- 新增彈窗 (保持不變) -->
     <el-dialog v-model="dialogVisible" :title="`新增${activeTab === 'expense' ? '支出' : '收入'}`" width="90%" max-width="500px">
       <el-form :model="form" label-position="top">
         <el-form-item label="項目名稱" required>
           <el-input v-model="form.name" :placeholder="activeTab === 'expense' ? '例如：買餸、交租' : '例如：薪金、家用轉入'" />
         </el-form-item>
-        
         <el-form-item label="金額 (HKD)" required>
           <el-input-number v-model="form.amount" :min="1" style="width: 100%" />
         </el-form-item>
-        
         <el-form-item label="對象" required>
           <el-select v-model="form.member_name" style="width: 100%">
             <el-option label="老公" value="老公" />
@@ -104,7 +166,6 @@
             <el-option label="家庭共用" value="家庭共用" />
           </el-select>
         </el-form-item>
-        
         <el-form-item label="類別" v-if="activeTab === 'expense'">
           <el-select v-model="form.category_name" style="width: 100%" allow-create filterable default-first-option>
             <el-option label="日常飲食" value="日常飲食" />
@@ -115,7 +176,6 @@
             <el-option label="雜費" value="雜費" />
           </el-select>
         </el-form-item>
-        
         <el-form-item label="狀態" v-if="activeTab === 'expense'">
           <el-radio-group v-model="form.status">
             <el-radio label="未處理">未處理</el-radio>
@@ -123,7 +183,6 @@
           </el-radio-group>
         </el-form-item>
       </el-form>
-      
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submitForm">確認儲存</el-button>
@@ -141,6 +200,7 @@ const d = new Date()
 const selectedMonth = ref(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
 
 const activeTab = ref('expense')
+const viewMode = ref('table') // 🆕 'table' 或 'kanban'
 const expenses = ref([])
 const incomes = ref([])
 const loading = ref(false)
@@ -149,6 +209,10 @@ const submitting = ref(false)
 
 const totalExpense = computed(() => expenses.value.reduce((sum, e) => sum + Number(e.amount), 0))
 const totalIncome = computed(() => incomes.value.reduce((sum, i) => sum + Number(i.amount), 0))
+
+// 🆕 區分未處理與已處理
+const pendingExpenses = computed(() => expenses.value.filter(e => e.status !== '已處理'))
+const doneExpenses = computed(() => expenses.value.filter(e => e.status === '已處理'))
 
 const form = ref({ name: '', amount: 1, member_name: '家庭共用', category_name: '日常飲食', status: '未處理' })
 
@@ -165,6 +229,16 @@ const fetchData = async () => {
   if (!incRes.error) incomes.value = incRes.data || []
   
   loading.value = false
+}
+
+// 🆕 一鍵切換處理狀態
+const toggleExpenseStatus = async (item) => {
+  const newStatus = item.status === '已處理' ? '未處理' : '已處理'
+  const { error } = await supabase.from('expenses').update({ status: newStatus }).eq('id', item.id)
+  if (error) ElMessage.error('更新失敗：' + error.message)
+  else {
+    item.status = newStatus // 畫面即時更新
+  }
 }
 
 const openAddDialog = () => {
@@ -228,25 +302,12 @@ onMounted(() => fetchData())
 
 <style scoped>
 .cashflow-container { width: 100%; }
-
-/* 🆕 手機端響應式標題列 */
-.page-header { 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
-  margin-bottom: 20px; 
-  flex-wrap: wrap; /* 允許換行 */
-  gap: 10px;
-}
-.header-left { 
-  display: flex; 
-  align-items: center; 
-  flex-wrap: wrap;
-  gap: 10px;
-}
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+.header-left { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .header-left h2 { margin: 0; color: #1e293b; }
 .month-picker { width: 140px; }
-.add-btn { flex-shrink: 0; }
+.header-actions { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+.view-toggle { margin-right: 10px; }
 
 .mb-20 { margin-bottom: 20px; }
 .stat-card { border-radius: 8px; background: #f8fafc; }
@@ -254,18 +315,71 @@ onMounted(() => fetchData())
 .stat-value { font-size: 20px; font-weight: bold; }
 .text-red { color: #ef4444; }
 .text-green { color: #10b981; }
+.text-muted { color: #94a3b8; text-decoration: line-through; }
 .font-bold { font-weight: 600; }
 .list-card { border-radius: 8px; border: none; overflow: hidden; }
 
-/* 🆕 表格橫向滑動容器 */
-.table-wrapper {
-  width: 100%;
+/* 表格橫向滑動 */
+.table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* 🆕 看板模式樣式 */
+.kanban-wrapper {
+  display: flex;
+  gap: 16px;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  padding-bottom: 10px;
+  min-height: 400px;
+}
+.kanban-column {
+  flex: 1;
+  min-width: 280px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+}
+.kanban-header {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+}
+.kanban-header.pending { color: #ef4444; border-bottom-color: #fca5a5; }
+.kanban-header.done { color: #10b981; border-bottom-color: #6ee7b7; }
+
+.kanban-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+.kanban-card {
+  border-radius: 6px;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.kanban-card.done-card { opacity: 0.8; }
+
+.card-title-row { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px; font-size: 15px; }
+.card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 13px; color: #64748b; }
+.card-actions { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+
+/* 手機端優化：看板變成上下排列 */
+@media (max-width: 768px) {
+  .kanban-wrapper { flex-direction: column; overflow-x: hidden; }
+  .kanban-column { min-width: 100%; }
+  .view-toggle { width: 100%; display: flex; justify-content: center; }
+  .header-actions { width: 100%; justify-content: space-between; }
 }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793807100
+V: 1793807300
 W: ai-wa-fs-001
 ═══ -->
