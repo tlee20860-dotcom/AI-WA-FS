@@ -1,11 +1,9 @@
 <template>
-  <!-- 如果網址是登入頁，就只顯示登入畫面 -->
   <router-view v-if="$route.path === '/login'" />
   
-  <!-- 其他頁面顯示側邊欄與主內容區 -->
   <el-container v-else class="app-layout">
     <!-- 側邊選單 -->
-    <el-aside width="220px" class="sidebar">
+    <el-aside width="auto" class="sidebar">
       <div class="logo">
         <h2>家庭入帳 V3</h2>
       </div>
@@ -15,25 +13,29 @@
         background-color="#1e293b"
         text-color="#94a3b8"
         active-text-color="#38bdf8"
+        :collapse="isCollapse"
       >
         <el-menu-item index="/">
           <el-icon><HomeFilled /></el-icon>
-          <span>工作台</span>
+          <template #title>工作台</template>
         </el-menu-item>
         <el-menu-item index="/cashflow">
           <el-icon><Money /></el-icon>
-          <span>收支流水</span>
+          <template #title>收支流水</template>
         </el-menu-item>
         <el-menu-item index="/insurance">
           <el-icon><Umbrella /></el-icon>
-          <span>保險供款</span>
+          <template #title>保險供款</template>
         </el-menu-item>
       </el-menu>
     </el-aside>
 
     <!-- 主內容區 -->
-    <el-container>
+    <el-container class="main-wrapper">
       <el-header class="header">
+        <el-button class="menu-toggle" text @click="isCollapse = !isCollapse">
+          <el-icon><Menu /></el-icon>
+        </el-button>
         <div class="header-title">歡迎回來</div>
         <el-button type="danger" plain size="small" @click="handleLogout">登出</el-button>
       </el-header>
@@ -46,9 +48,19 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage } from 'element-plus'
-import { HomeFilled, Money, Umbrella } from '@element-plus/icons-vue'
+import { HomeFilled, Money, Umbrella, Menu } from '@element-plus/icons-vue'
+
+const isCollapse = ref(false)
+
+onMounted(() => {
+  // 手機端預設收起側邊欄
+  if (window.innerWidth < 768) {
+    isCollapse.value = true
+  }
+})
 
 const handleLogout = async () => {
   await supabase.auth.signOut()
@@ -57,19 +69,20 @@ const handleLogout = async () => {
 </script>
 
 <style>
-/* 全局重置與佈局樣式 */
 body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; }
-.app-layout { height: 100vh; }
-.sidebar { background-color: #1e293b; color: white; }
-.logo { height: 60px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #334155; }
-.logo h2 { margin: 0; font-size: 18px; color: #f8fafc; }
+.app-layout { height: 100vh; overflow: hidden; }
+.sidebar { background-color: #1e293b; color: white; transition: width 0.3s; }
+.logo { height: 60px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #334155; overflow: hidden; }
+.logo h2 { margin: 0; font-size: 18px; color: #f8fafc; white-space: nowrap; }
 .sidebar .el-menu { border-right: none; }
-.header { background-color: white; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; }
-.header-title { font-weight: bold; color: #334155; }
-.main-content { background-color: #f1f5f9; padding: 20px; }
+.main-wrapper { flex: 1; width: 100%; overflow: hidden; }
+.header { background-color: white; display: flex; align-items: center; border-bottom: 1px solid #e2e8f0; padding: 0 15px; }
+.header-title { font-weight: bold; color: #334155; margin-left: 10px; flex: 1; }
+.main-content { background-color: #f1f5f9; padding: 20px; overflow-y: auto; }
+.menu-toggle { margin-right: 10px; color: #64748b; }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793806200
+V: 1793806700
 W: ai-wa-fs-001
 ═══ -->
