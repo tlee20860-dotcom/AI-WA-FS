@@ -5,7 +5,6 @@
       <el-button type="primary" @click="openAddDialog">+ 新增保單</el-button>
     </div>
 
-    <!-- 保單列表 -->
     <div v-if="loading" style="text-align: center; padding: 40px;">
       <el-icon class="is-loading" :size="30"><Loading /></el-icon>
     </div>
@@ -27,41 +26,55 @@
         <div class="card-body">
           <div class="info-row">
             <span class="label">本期月均</span>
-            <span class="value">HK$ {{ p.monthly_average.toLocaleString() }}</span>
+            <span class="value text-blue">HK$ {{ p.monthly_average.toLocaleString() }}</span>
           </div>
           <div class="info-row">
             <span class="label">繳費方式</span>
             <span class="value">{{ p.payment_freq }} (HK$ {{ p.premium_amount.toLocaleString() }})</span>
           </div>
-          <div class="info-row">
-            <span class="label">供款年期</span>
-            <span class="value">{{ p.total_years }} 年</span>
+          
+          <!-- 🆕 自動計算進度 -->
+          <div class="progress-area">
+            <div class="info-row" style="margin-bottom: 4px;">
+              <span class="label">供款進度</span>
+              <span class="value">{{ getProgress(p).text }}</span>
+            </div>
+            <el-progress :percentage="getProgress(p).pct" :show-text="false" :stroke-width="6" />
           </div>
+        </div>
+
+        <!-- 🆕 本月狀態切換 -->
+        <div class="card-footer">
+          <div class="status-info">
+            <span>本月狀態：</span>
+            <el-tag :type="getCurrentPaymentStatus(p.id) === '已轉' ? 'success' : 'info'" size="small">
+              {{ getCurrentPaymentStatus(p.id) }}
+            </el-tag>
+          </div>
+          <el-button 
+            :type="getCurrentPaymentStatus(p.id) === '已轉' ? 'default' : 'success'" 
+            size="small" 
+            @click="togglePayment(p.id)"
+          >
+            {{ getCurrentPaymentStatus(p.id) === '已轉' ? '取消轉帳' : '確認已轉' }}
+          </el-button>
         </div>
       </el-card>
     </div>
 
-    <!-- 新增保單彈窗 -->
-    <el-dialog
-      v-model="dialogVisible"
-      title="新增保單"
-      width="90%"
-      max-width="500px"
-      :close-on-click-modal="false"
-    >
+    <!-- 新增保單彈窗 (與之前相同) -->
+    <el-dialog v-model="dialogVisible" title="新增保單" width="90%" max-width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-position="top">
         <el-form-item label="保單名稱" required>
           <el-input v-model="form.name" placeholder="例如：宏利儲蓄保險" />
         </el-form-item>
-        
         <el-form-item label="保險公司">
           <el-input v-model="form.company" placeholder="例如：宏利" />
         </el-form-item>
-
         <el-row :gutter="10">
           <el-col :span="12">
             <el-form-item label="開始日期" required>
-              <el-date-picker v-model="form.start_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" />
+              <el-date-picker v-model="form.start_date" type="date" style="width: 100%" value-format="YYYY-MM-DD" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -70,7 +83,6 @@
             </el-form-item>
           </el-col>
         </el-row>
-
         <el-row :gutter="10">
           <el-col :span="12">
             <el-form-item label="繳費頻率" required>
@@ -86,25 +98,17 @@
             </el-form-item>
           </el-col>
         </el-row>
-
         <el-form-item label="保單類型" required>
           <el-radio-group v-model="form.type">
             <el-radio label="normal">普通保險</el-radio>
             <el-radio label="fund_insurance">基金保險</el-radio>
           </el-radio-group>
         </el-form-item>
-
-        <!-- 自動平攤預覽 -->
         <div v-if="form.premium_amount > 0" class="preview-box">
           <el-icon><InfoFilled /></el-icon>
-          <span>
-            系統將自動平攤：每月約 
-            <strong>HK$ {{ computedMonthlyAverage.toLocaleString() }}</strong>
-          </span>
+          <span>系統將自動平攤：每月約 <strong>HK$ {{ computedMonthlyAverage.toLocaleString() }}</strong></span>
         </div>
-
       </el-form>
-      
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
@@ -112,7 +116,6 @@
         </span>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
@@ -123,109 +126,125 @@ import { ElMessage } from 'element-plus'
 import { Loading, InfoFilled } from '@element-plus/icons-vue'
 
 const policies = ref([])
+const payments = ref([]) // 🆕 儲存所有繳費紀錄
 const loading = ref(true)
 const dialogVisible = ref(false)
 const submitting = ref(false)
 
-// 預設表單
-const form = ref({
-  name: '',
-  company: '',
-  start_date: new Date().toISOString().split('T')[0],
-  total_years: 10,
-  payment_freq: '月繳',
-  premium_amount: 0,
-  type: 'normal'
+// 取得當前年月字串 (例如 "2026-11")
+const currentYearMonth = computed(() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 })
 
-// 自動計算平攤後的月均金額
-const computedMonthlyAverage = computed(() => {
-  const amt = form.value.premium_amount || 0
-  if (form.value.payment_freq === '年繳') {
-    return Math.round(amt / 12)
+// 🆕 計算保單進度
+const getProgress = (p) => {
+  const start = new Date(p.start_date)
+  const now = new Date()
+  const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
+  const currentPeriod = Math.max(0, diffMonths + 1)
+  const totalPeriods = p.total_years * 12
+  const pct = Math.min(100, Math.round((currentPeriod / totalPeriods) * 100))
+  return {
+    text: `${currentPeriod} / ${totalPeriods} 期 (${pct}%)`,
+    pct: pct
   }
-  return amt
-})
+}
 
-// 獲取保單列表
-const fetchPolicies = async () => {
-  loading.value = true
-  const { data, error } = await supabase
-    .from('insurance_policies')
-    .select('*')
-    .order('created_at', { ascending: false })
+// 🆕 取得該保單「本月」的狀態
+const getCurrentPaymentStatus = (policyId) => {
+  const record = payments.value.find(
+    pay => pay.policy_id === policyId && pay.year_month === currentYearMonth.value
+  )
+  return record ? record.status : '未轉'
+}
+
+// 🆕 切換狀態（寫入或更新資料庫）
+const togglePayment = async (policyId) => {
+  const currentStatus = getCurrentPaymentStatus(policyId)
+  const newStatus = currentStatus === '已轉' ? '未轉' : '已轉'
+  
+  // 找找看有沒有這個月的紀錄
+  const existing = payments.value.find(
+    pay => pay.policy_id === policyId && pay.year_month === currentYearMonth.value
+  )
+
+  let error
+  if (existing) {
+    // 更新
+    const res = await supabase.from('insurance_payments').update({ status: newStatus }).eq('id', existing.id)
+    error = res.error
+  } else {
+    // 新增
+    const res = await supabase.from('insurance_payments').insert([{
+      policy_id: policyId,
+      year_month: currentYearMonth.value,
+      status: newStatus
+    }])
+    error = res.error
+  }
 
   if (error) {
-    ElMessage.error('載入保單失敗：' + error.message)
+    ElMessage.error('狀態更新失敗：' + error.message)
   } else {
-    policies.value = data || []
+    ElMessage.success(`已標記為 ${newStatus}`)
+    fetchData() // 重新抓取資料刷新畫面
   }
+}
+
+// 表單相關
+const form = ref({ name: '', company: '', start_date: new Date().toISOString().split('T')[0], total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' })
+const computedMonthlyAverage = computed(() => form.value.payment_freq === '年繳' ? Math.round((form.value.premium_amount || 0) / 12) : (form.value.premium_amount || 0))
+
+// 獲取資料
+const fetchData = async () => {
+  loading.value = true
+  const [policiesRes, paymentsRes] = await Promise.all([
+    supabase.from('insurance_policies').select('*').order('created_at', { ascending: false }),
+    supabase.from('insurance_payments').select('*')
+  ])
+
+  if (policiesRes.error) ElMessage.error('載入保單失敗')
+  else policies.value = policiesRes.data || []
+
+  if (paymentsRes.error) ElMessage.error('載入狀態失敗')
+  else payments.value = paymentsRes.data || []
+
   loading.value = false
 }
 
-// 打開新增彈窗
 const openAddDialog = () => {
-  form.value = {
-    name: '',
-    company: '',
-    start_date: new Date().toISOString().split('T')[0],
-    total_years: 10,
-    payment_freq: '月繳',
-    premium_amount: 0,
-    type: 'normal'
-  }
+  form.value = { name: '', company: '', start_date: new Date().toISOString().split('T')[0], total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' }
   dialogVisible.value = true
 }
 
-// 提交表單
 const submitForm = async () => {
-  if (!form.value.name || !form.value.start_date || form.value.premium_amount <= 0) {
-    ElMessage.warning('請填寫完整資訊')
-    return
-  }
-
+  if (!form.value.name || !form.value.start_date || form.value.premium_amount <= 0) return ElMessage.warning('請填寫完整資訊')
   submitting.value = true
-  
-  // 這裡寫死家庭 ID 為預設的 '00000000-0000-0000-0000-000000000001'
-  const familyId = '00000000-0000-0000-0000-000000000001'
-
-  const { error } = await supabase.from('insurance_policies').insert([
-    {
-      family_id: familyId,
-      name: form.value.name,
-      company: form.value.company,
-      start_date: form.value.start_date,
-      total_years: form.value.total_years,
-      payment_freq: form.value.payment_freq,
-      premium_amount: form.value.premium_amount,
-      monthly_average: computedMonthlyAverage.value,
-      type: form.value.type
-    }
-  ])
-
+  const { error } = await supabase.from('insurance_policies').insert([{
+    family_id: '00000000-0000-0000-0000-000000000001',
+    name: form.value.name, company: form.value.company, start_date: form.value.start_date,
+    total_years: form.value.total_years, payment_freq: form.value.payment_freq,
+    premium_amount: form.value.premium_amount, monthly_average: computedMonthlyAverage.value,
+    type: form.value.type
+  }])
   submitting.value = false
-
-  if (error) {
-    ElMessage.error('儲存失敗：' + error.message)
-  } else {
+  if (error) ElMessage.error('儲存失敗：' + error.message)
+  else {
     ElMessage.success('✅ 保單已新增')
     dialogVisible.value = false
-    fetchPolicies() // 重新載入列表
+    fetchData()
   }
 }
 
-onMounted(() => {
-  fetchPolicies()
-})
+onMounted(() => fetchData())
 </script>
 
 <style scoped>
 .insurance-container { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; color: #1e293b; }
-
-/* 列表樣式 */
-.policy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.policy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .policy-card { border-radius: 12px; border: none; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
 .title-area h3 { margin: 0 0 4px 0; color: #0f172a; font-size: 16px; }
@@ -234,12 +253,14 @@ onMounted(() => {
 .info-row { display: flex; justify-content: space-between; font-size: 14px; }
 .label { color: #64748b; }
 .value { font-weight: 600; color: #334155; }
-
-/* 彈窗預覽框 */
+.text-blue { color: #1d4ed8; }
+.progress-area { margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
+.status-info { font-size: 13px; color: #64748b; display: flex; align-items: center; gap: 6px; }
 .preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px 15px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 10px; }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/InsuranceView.vue
-V: 1793806800
+V: 1793806900
 W: ai-wa-fs-001
 ═══ -->
