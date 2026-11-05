@@ -16,6 +16,9 @@
 </script>
 
 <style scoped>
+.insurance-container {
+  width: 100%;
+}
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -29,6 +32,6 @@
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/InsuranceView.vue
-V: 1793806300
+V: 1793806500
 W: ai-wa-fs-001
 ═══ -->
