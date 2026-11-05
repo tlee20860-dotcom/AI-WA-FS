@@ -2,55 +2,68 @@ export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
 
-  // 構建真實的 Supabase 目標網址
-  const targetUrl = new URL(`https://vatdtxdgljowdwvwbzdmt.supabase.co${url.pathname.replace('/api/supabase', '')}${url.search}`);
+  // 1. 處理預檢請求 (CORS)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Max-Age': '86400',
+      }
+    });
+  }
 
-  // 複製使用者的 Headers
-  const newHeaders = new Headers(request.headers);
-  
-  // 剔除所有可能導致 Cloudflare 崩潰的內部標頭
-  newHeaders.delete('host');
-  newHeaders.delete('content-length');
-  newHeaders.delete('cf-connecting-ip');
-  newHeaders.delete('cf-ray');
-  newHeaders.delete('cf-visitor');
-  newHeaders.delete('x-forwarded-proto');
-  newHeaders.delete('x-real-ip');
+  // 2. 目標 URL
+  const targetPath = url.pathname.replace('/api/supabase', '');
+  const targetUrl = `https://vatdtxdgljowdwvwbzdmt.supabase.co${targetPath}${url.search}`;
 
-  // 安全讀取 Body (使用 ArrayBuffer 轉交，連文字解析都不會出錯)
+  // 3. 🚨 絕對白名單：只傳遞這些 Header，杜絕一切 530 崩潰
+  const newHeaders = new Headers();
+  const allowed = ['apikey', 'authorization', 'content-type', 'accept', 'prefer', 'x-client-info', 'cache-control', 'range'];
+  allowed.forEach(h => {
+    const val = request.headers.get(h);
+    if (val) newHeaders.set(h, val);
+  });
+
+  // 4. 安全讀取 Body
   let body = null;
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
+  if (!['GET', 'HEAD'].includes(request.method)) {
     body = await request.arrayBuffer();
   }
 
   try {
-    // 發送給 Supabase
-    const proxyReq = new Request(targetUrl.toString(), {
+    // 5. 發送給 Supabase
+    const response = await fetch(targetUrl, {
       method: request.method,
       headers: newHeaders,
       body: body
     });
 
-    const response = await fetch(proxyReq);
+    // 6. 🚨 安全地重建 Headers 物件，避免修改到 Cloudflare 的受保護屬性
+    const resHeaders = new Headers(response.headers);
+    resHeaders.delete('content-encoding');
+    resHeaders.delete('content-length');
+    resHeaders.set('Access-Control-Allow-Origin', '*');
+    resHeaders.set('Access-Control-Allow-Headers', '*');
 
-    // 將結果包裝並回傳
-    const newResponse = new Response(response.body, response);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: resHeaders
+    });
     
-    // 移除會讓瀏覽器報錯的標頭
-    newResponse.headers.delete('content-encoding');
-    newResponse.headers.delete('content-length');
-    
-    return newResponse;
   } catch (error) {
-    return new Response(JSON.stringify({ message: 'Proxy Error: ' + error.message }), {
+    return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 }
 
 /* ═══ EOF ═══
 F: AI-WA-FS/functions/api/supabase/[[path]].js
-V: 1793805800
+V: 1793805900
 W: ai-wa-fs-001
 ═══ */
