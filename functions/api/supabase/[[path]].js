@@ -2,70 +2,60 @@ export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
 
-  // 1. 處理 CORS 預檢
+  // 處理 CORS
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || '*',
+        'Access-Control-Allow-Headers': '*',
       }
     });
   }
 
-  // 2. 構建目標網址
-  const targetPath = url.pathname.replace('/api/supabase', '');
-  const targetUrl = `https://vatdtxdgljowdwvwbzdmt.supabase.co${targetPath}${url.search}`;
+  const targetUrl = new URL(`https://vatdtxdgljowdwvwbzdmt.supabase.co${url.pathname.replace('/api/supabase', '')}${url.search}`);
 
-  // 3. 只保留核心 Header，避免 Cloudflare 內部衝突
+  // 手動只挑選需要的 Header，杜絕一切衝突
   const newHeaders = new Headers();
-  ['apikey', 'authorization', 'content-type', 'accept', 'prefer'].forEach(h => {
+  const allowed = ['apikey', 'authorization', 'content-type', 'accept', 'prefer', 'x-client-info'];
+  allowed.forEach(h => {
     if (request.headers.has(h)) newHeaders.set(h, request.headers.get(h));
   });
 
-  // 4. 安全讀取 Body (使用 ArrayBuffer 確保格式不跑掉)
+  // 將 Body 轉為純文字提取
   let body = null;
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-    body = await request.arrayBuffer();
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    body = await request.text();
   }
 
   try {
-    // 5. 發送請求
-    const response = await fetch(targetUrl, {
+    const response = await fetch(targetUrl.toString(), {
       method: request.method,
       headers: newHeaders,
-      body: body
+      body: body,
+      redirect: 'manual'
     });
 
-    // 6. 構建回傳結果
-    const newResponse = new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers
-    });
-
+    const newResponse = new Response(response.body, response);
+    
+    // 移除可能導致瀏覽器報錯的 Cloudflare 標頭
+    newResponse.headers.delete('content-encoding');
+    newResponse.headers.delete('content-length');
     newResponse.headers.set('Access-Control-Allow-Origin', '*');
     newResponse.headers.set('Access-Control-Allow-Headers', '*');
     
     return newResponse;
-    
   } catch (error) {
-    return new Response(JSON.stringify({ 
-      error: 'Proxy Error', 
-      message: error.message 
-    }), {
+    return new Response(JSON.stringify({ message: 'Proxy Error: ' + error.message }), {
       status: 500,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' 
-      }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 }
 
 /* ═══ EOF ═══
 F: AI-WA-FS/functions/api/supabase/[[path]].js
-V: 1793805500
+V: 1793805700
 W: ai-wa-fs-001
 ═══ */
