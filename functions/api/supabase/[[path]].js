@@ -2,7 +2,7 @@ export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
 
-  // 1. 處理預檢請求 (CORS)
+  // 1. 處理跨域預檢請求 (CORS)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -15,13 +15,13 @@ export async function onRequest(context) {
     });
   }
 
-  // 2. 目標 URL
+  // 2. 替換為你全新的 Supabase 網址
   const targetPath = url.pathname.replace('/api/supabase', '');
-  const targetUrl = `https://vatdtxdgljowdwvwbzdmt.supabase.co${targetPath}${url.search}`;
+  const targetUrl = `https://ynfnheiefruwykbthqzd.supabase.co${targetPath}${url.search}`;
 
-  // 3. 🚨 絕對白名單：只傳遞這些 Header，杜絕一切 530 崩潰
+  // 3. 嚴格過濾 Header，避免 530 崩潰
   const newHeaders = new Headers();
-  const allowed = ['apikey', 'authorization', 'content-type', 'accept', 'prefer', 'x-client-info', 'cache-control', 'range'];
+  const allowed = ['apikey', 'authorization', 'content-type', 'accept', 'prefer', 'x-client-info'];
   allowed.forEach(h => {
     const val = request.headers.get(h);
     if (val) newHeaders.set(h, val);
@@ -41,7 +41,7 @@ export async function onRequest(context) {
       body: body
     });
 
-    // 6. 🚨 安全地重建 Headers 物件，避免修改到 Cloudflare 的受保護屬性
+    // 6. 重建 Response Header
     const resHeaders = new Headers(response.headers);
     resHeaders.delete('content-encoding');
     resHeaders.delete('content-length');
@@ -64,6 +64,6 @@ export async function onRequest(context) {
 
 /* ═══ EOF ═══
 F: AI-WA-FS/functions/api/supabase/[[path]].js
-V: 1793805900
+V: 1793806000
 W: ai-wa-fs-001
 ═══ */
