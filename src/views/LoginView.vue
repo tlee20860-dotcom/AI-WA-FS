@@ -3,16 +3,16 @@
     <el-card class="login-card">
       <div class="login-header">
         <h2>家庭入帳 V3</h2>
-        <p>請登入以存取您的財務資料</p>
+        <p>請輸入您的專屬帳號登入</p>
       </div>
       
       <el-form @submit.prevent="handleLogin">
         <el-form-item>
           <el-input 
-            v-model="email" 
-            placeholder="請輸入 Email" 
+            v-model="account" 
+            placeholder="請輸入帳號 (例如: 老公)" 
             size="large"
-            prefix-icon="Message"
+            prefix-icon="User"
           />
         </el-form-item>
         <el-form-item>
@@ -45,30 +45,35 @@ import { ref } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage } from 'element-plus'
 
-const email = ref('')
+const account = ref('')
 const password = ref('')
 const loading = ref(false)
 
 const handleLogin = async () => {
-  if (!email.value || !password.value) {
+  if (!account.value || !password.value) {
     ElMessage.warning('請輸入帳號與密碼')
     return
   }
 
   loading.value = true
   try {
+    // 如果使用者輸入的帳號沒有 @，系統自動在背後補上虛擬 Email 後綴
+    const virtualEmail = account.value.includes('@') 
+      ? account.value 
+      : `${account.value}@family.local`
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.value,
+      email: virtualEmail,
       password: password.value,
     })
 
     if (error) throw error
     
     ElMessage.success('登入成功！')
-    // 後續這裡會加入跳轉到首頁的程式碼
+    window.location.reload() // 登入成功後重新整理，觸發路由跳轉到首頁
     
   } catch (error) {
-    ElMessage.error('登入失敗：' + error.message)
+    ElMessage.error('登入失敗：帳號或密碼錯誤')
   } finally {
     loading.value = false
   }
@@ -108,6 +113,6 @@ const handleLogin = async () => {
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/LoginView.vue
-V: 1793804200
+V: 1793804700
 W: ai-wa-fs-001
 ═══ -->
