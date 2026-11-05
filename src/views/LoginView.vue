@@ -10,7 +10,7 @@
         <el-form-item>
           <el-input 
             v-model="account" 
-            placeholder="請輸入帳號 (例如: 老公)" 
+            placeholder="請輸入帳號 (例如: admin)" 
             size="large"
             prefix-icon="User"
           />
@@ -57,23 +57,27 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
-    // 如果使用者輸入的帳號沒有 @，系統自動在背後補上虛擬 Email 後綴
-    const virtualEmail = account.value.includes('@') 
-      ? account.value 
-      : `${account.value}@family.local`
+    const cleanAccount = account.value.trim()
+    // 👇 這裡把網域改成了合法的 fs-app.com
+    const virtualEmail = cleanAccount.includes('@') 
+      ? cleanAccount 
+      : `${cleanAccount}@fs-app.com`
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: virtualEmail,
       password: password.value,
     })
 
-    if (error) throw error
+    if (error) {
+      ElMessage.error('登入失敗：' + error.message)
+      throw error
+    }
     
     ElMessage.success('登入成功！')
-    window.location.reload() // 登入成功後重新整理，觸發路由跳轉到首頁
+    window.location.reload()
     
   } catch (error) {
-    ElMessage.error('登入失敗：帳號或密碼錯誤')
+    console.error('詳細錯誤:', error)
   } finally {
     loading.value = false
   }
@@ -81,35 +85,12 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  background-color: var(--bg-color);
-}
-.login-card {
-  width: 100%;
-  max-width: 400px;
-  padding: 20px;
-}
-.login-header {
-  text-align: center;
-  margin-bottom: 30px;
-}
-.login-header h2 {
-  margin: 0 0 10px 0;
-  color: var(--text-main);
-}
-.login-header p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-.login-btn {
-  width: 100%;
-  margin-top: 10px;
-}
+.login-container { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: var(--bg-color); }
+.login-card { width: 100%; max-width: 400px; padding: 20px; }
+.login-header { text-align: center; margin-bottom: 30px; }
+.login-header h2 { margin: 0 0 10px 0; color: var(--text-main); }
+.login-header p { margin: 0; color: var(--text-secondary); font-size: 14px; }
+.login-btn { width: 100%; margin-top: 10px; }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/LoginView.vue
