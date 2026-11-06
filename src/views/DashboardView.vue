@@ -24,7 +24,7 @@
     </el-row>
 
     <!-- 年度統計卡片 -->
-    <el-row :gutter="15" class="mb-20">
+    <el-row :gutter="20" class="mb-20">
       <el-col :xs="24" :sm="8" class="mb-mobile">
         <el-card shadow="never" class="stat-card income-card">
           <div class="stat-icon"><el-icon><TrendCharts /></el-icon></div>
@@ -69,10 +69,10 @@
       </div>
       <div class="table-wrapper">
         <el-table :data="annualData" style="width: 100%; min-width: 500px;" stripe default-expand-all>
-          <el-table-column prop="year" label="年度" width="120" sortable>
+          <el-table-column prop="year" label="年度" width="140" sortable>
             <template #default="scope">
-              <span class="font-bold">{{ scope.row.year }} 年</span>
-              <el-tag v-if="scope.row.year === currentYear" size="small" type="primary" class="ml-2">今年</el-tag>
+              <span class="font-bold text-slate-700">{{ scope.row.year }} 年</span>
+              <el-tag v-if="scope.row.year === currentYear" size="small" type="primary" class="ml-2" effect="light">今年</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="income" label="家庭收入" align="right" sortable>
@@ -139,8 +139,8 @@ const fetchDashboardData = async () => {
     // 2. 抓取所有收支紀錄 (用於計算年度)
     const [incRes, expRes, insRes, polRes] = await Promise.all([
       supabase.from('incomes').select('year_month, amount'),
-      supabase.from('expenses').select('year_month, amount'),
-      supabase.from('insurance_payments').select('year_month, policy_id, status').eq('status', '已轉'),
+      supabase.from('expenses').select('year_month, amount').eq('status', '已處理'),
+      supabase.from('insurance_payments').select('year_month, policy_id').eq('status', '已轉'),
       supabase.from('insurance_policies').select('id, monthly_average')
     ])
 
@@ -170,7 +170,7 @@ const fetchDashboardData = async () => {
       })
     }
 
-    // 5. 計算一般支出
+    // 5. 計算一般支出 (已處理)
     const monthsWithData = new Set()
     if (expRes.data) {
       expRes.data.forEach(item => {
@@ -222,16 +222,16 @@ onMounted(() => {
 
 <style scoped>
 .dashboard-container { width: 100%; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.page-header h2 { margin: 0; color: #1e293b; }
-.report-btn { border-radius: 8px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-header h2 { margin: 0; color: #1e293b; font-size: 24px; font-weight: 700; }
+.report-btn { border-radius: 10px; }
 
-.mb-20 { margin-bottom: 20px; }
-.mb-mobile { margin-bottom: 15px; }
+.mb-20 { margin-bottom: 24px; }
+.mb-mobile { margin-bottom: 16px; }
 
 /* 總餘額大卡 */
 .total-balance-card {
-  border-radius: 12px;
+  border-radius: 20px;
   border: none;
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
   color: white;
@@ -239,59 +239,59 @@ onMounted(() => {
 .total-balance-card :deep(.el-card__body) {
   display: flex;
   align-items: center;
-  padding: 25px;
+  padding: 30px;
 }
 .card-icon {
-  width: 56px; height: 56px;
-  border-radius: 12px;
+  width: 64px; height: 64px;
+  border-radius: 16px;
   background: rgba(255,255,255,0.1);
   display: flex; justify-content: center; align-items: center;
-  font-size: 28px; margin-right: 20px;
+  font-size: 32px; margin-right: 24px;
+  color: #38bdf8;
 }
 .card-content { flex: 1; }
-.asset-label { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
-.asset-value { font-size: 32px; font-weight: bold; font-family: monospace; margin-bottom: 5px; }
+.asset-label { font-size: 15px; color: #94a3b8; margin-bottom: 8px; }
+.asset-value { font-size: 36px; font-weight: bold; font-family: monospace; margin-bottom: 6px; }
 .asset-sub { font-size: 13px; color: #64748b; }
 
 /* 統計卡片 */
-.stat-card { border-radius: 12px; border: none; position: relative; overflow: hidden; height: 100%; }
-.stat-card :deep(.el-card__body) { display: flex; align-items: center; padding: 20px; height: 100%; }
-.stat-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; margin-right: 15px; flex-shrink: 0; }
+.stat-card { border-radius: 20px; border: none; position: relative; overflow: hidden; height: 100%; }
+.stat-card :deep(.el-card__body) { display: flex; align-items: center; padding: 24px; height: 100%; }
+.stat-icon { width: 56px; height: 56px; border-radius: 16px; display: flex; justify-content: center; align-items: center; font-size: 28px; margin-right: 20px; flex-shrink: 0; }
 .stat-info { display: flex; flex-direction: column; }
-.stat-label { font-size: 14px; color: #64748b; margin-bottom: 4px; }
-.stat-value { font-size: 22px; font-weight: bold; white-space: nowrap; margin-bottom: 4px; }
+.stat-label { font-size: 14px; color: #64748b; margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: bold; white-space: nowrap; margin-bottom: 6px; }
 .stat-sub { font-size: 12px; color: #94a3b8; }
 
 .income-card .stat-icon { background: #ecfdf5; color: #10b981; }
 .expense-card .stat-icon { background: #fef2f2; color: #ef4444; }
-.balance-card .stat-icon { background: #eff6ff; color: #3b82f6; }
+.balance-card .stat-icon { background: #EEF2FF; color: #6366F1; }
 
 .text-green { color: #10b981; }
 .text-red { color: #ef4444; }
+.text-slate-700 { color: #334155; }
 .font-bold { font-weight: 600; }
 
 /* 年度表格 */
-.section-title { margin: 0 0 15px 0; color: #1e293b; font-size: 18px; }
-.table-card { border-radius: 12px; border: none; overflow: hidden; }
-.table-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+.section-title { margin: 0 0 16px 0; color: #1e293b; font-size: 18px; font-weight: 700; }
+.table-card { border-radius: 20px; border: none; overflow: hidden; }
+.table-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: #F8FAFC; border-bottom: 1px solid #e2e8f0; }
 .total-count { font-size: 14px; color: #64748b; }
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .ml-2 { margin-left: 8px; }
-:deep(.el-table__header-wrapper th) { background-color: #f8fafc; font-weight: bold; color: #334155; }
-:deep(.el-table__row:hover > td) { background-color: #f1f5f9 !important; }
 
 @media (max-width: 768px) {
-  .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
   .report-btn { width: 100%; }
   .asset-value { font-size: 28px; }
-  .stat-value { font-size: 18px; }
-  .stat-icon { width: 40px; height: 40px; font-size: 20px; margin-right: 10px; }
+  .stat-value { font-size: 20px; }
+  .stat-icon { width: 48px; height: 48px; font-size: 24px; margin-right: 16px; }
 }
 </style>
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/DashboardView.vue
-V: 1793970000
+V: 1793971200
 W: ai-wa-fs-002
 ═══ -->
