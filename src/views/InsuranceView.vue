@@ -5,6 +5,21 @@
       <el-button type="primary" @click="openAddDialog">+ 新增保單</el-button>
     </div>
 
+    <!-- 本月總供款額統計 -->
+    <el-row :gutter="20" class="mb-24">
+      <el-col :span="24">
+        <el-card shadow="never" class="stat-card">
+          <div class="stat-content">
+            <div class="stat-icon"><el-icon><Money /></el-icon></div>
+            <div class="stat-info">
+              <div class="stat-label">本月保單總供款額 ({{ currentYearMonth }})</div>
+              <div class="stat-value text-blue">HK$ {{ monthlyTotal.toLocaleString() }}</div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <div v-if="loading" style="text-align: center; padding: 40px;">
       <el-icon class="is-loading" :size="30"><Loading /></el-icon>
     </div>
@@ -22,7 +37,6 @@
             <el-tag :type="p.type === 'fund_insurance' ? 'warning' : 'primary'" size="small" style="margin-right: 8px;">
               {{ p.type === 'fund_insurance' ? '基金保險' : '普通保險' }}
             </el-tag>
-            <!-- 🆕 編輯與刪除按鈕 -->
             <el-dropdown trigger="click" @command="(cmd) => handleCommand(cmd, p)">
               <el-button text size="small"><el-icon><MoreFilled /></el-icon></el-button>
               <template #dropdown>
@@ -46,28 +60,17 @@
           </div>
           
           <div class="progress-area">
-            <div class="info-row" style="margin-bottom: 4px;">
+            <div class="info-row" style="margin-bottom: 6px;">
               <span class="label">供款進度</span>
               <span class="value">{{ getProgress(p).text }}</span>
             </div>
-            <el-progress :percentage="getProgress(p).pct" :show-text="false" :stroke-width="6" />
+            <el-progress 
+              :percentage="getProgress(p).pct" 
+              :show-text="false" 
+              :stroke-width="8"
+              :color="getProgress(p).pct >= 100 ? '#10b981' : '#6366F1'"
+            />
           </div>
-        </div>
-
-        <div class="card-footer">
-          <div class="status-info">
-            <span>本月狀態：</span>
-            <el-tag :type="getCurrentPaymentStatus(p.id) === '已轉' ? 'success' : 'info'" size="small">
-              {{ getCurrentPaymentStatus(p.id) }}
-            </el-tag>
-          </div>
-          <el-button 
-            :type="getCurrentPaymentStatus(p.id) === '已轉' ? 'default' : 'success'" 
-            size="small" 
-            @click="togglePayment(p.id)"
-          >
-            {{ getCurrentPaymentStatus(p.id) === '已轉' ? '取消轉帳' : '確認已轉' }}
-          </el-button>
         </div>
       </el-card>
     </div>
@@ -81,7 +84,7 @@
         <el-form-item label="保險公司">
           <el-input v-model="form.company" placeholder="例如：宏利" />
         </el-form-item>
-        <el-row :gutter="10">
+        <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="開始日期" required>
               <el-date-picker v-model="form.start_date" type="date" style="width: 100%" value-format="YYYY-MM-DD" />
@@ -93,7 +96,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="10">
+        <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="繳費頻率" required>
               <el-select v-model="form.payment_freq" style="width: 100%">
@@ -133,66 +136,34 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, InfoFilled, MoreFilled } from '@element-plus/icons-vue'
+import { Loading, InfoFilled, MoreFilled, Money } from '@element-plus/icons-vue'
 
 const policies = ref([])
 const payments = ref([]) 
 const loading = ref(true)
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const isEdit = ref(false) // 🆕 判斷是否為編輯模式
+const isEdit = ref(false)
 
 const currentYearMonth = computed(() => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 })
 
+// 本月總供款額
+const monthlyTotal = computed(() => {
+  return policies.value.reduce((sum, p) => sum + Number(p.monthly_average), 0)
+})
+
+// 計算進度：已轉筆數 / 總期數
 const getProgress = (p) => {
-  const start = new Date(p.start_date)
-  const now = new Date()
-  const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
-  const currentPeriod = Math.max(0, diffMonths + 1)
+  const policyPayments = payments.value.filter(pay => pay.policy_id === p.id)
+  const paidCount = policyPayments.filter(pay => pay.status === '已轉').length
   const totalPeriods = p.total_years * 12
-  const pct = Math.min(100, Math.round((currentPeriod / totalPeriods) * 100))
+  const pct = totalPeriods > 0 ? Math.min(100, Math.round((paidCount / totalPeriods) * 100)) : 0
   return {
-    text: `${currentPeriod} / ${totalPeriods} 期 (${pct}%)`,
+    text: `${paidCount} / ${totalPeriods} 期 (${pct}%)`,
     pct: pct
-  }
-}
-
-const getCurrentPaymentStatus = (policyId) => {
-  const record = payments.value.find(
-    pay => pay.policy_id === policyId && pay.year_month === currentYearMonth.value
-  )
-  return record ? record.status : '未轉'
-}
-
-const togglePayment = async (policyId) => {
-  const currentStatus = getCurrentPaymentStatus(policyId)
-  const newStatus = currentStatus === '已轉' ? '未轉' : '已轉'
-  
-  const existing = payments.value.find(
-    pay => pay.policy_id === policyId && pay.year_month === currentYearMonth.value
-  )
-
-  let error
-  if (existing) {
-    const res = await supabase.from('insurance_payments').update({ status: newStatus }).eq('id', existing.id)
-    error = res.error
-  } else {
-    const res = await supabase.from('insurance_payments').insert([{
-      policy_id: policyId,
-      year_month: currentYearMonth.value,
-      status: newStatus
-    }])
-    error = res.error
-  }
-
-  if (error) {
-    ElMessage.error('狀態更新失敗：' + error.message)
-  } else {
-    ElMessage.success(`已標記為 ${newStatus}`)
-    fetchData() 
   }
 }
 
@@ -221,7 +192,6 @@ const openAddDialog = () => {
   dialogVisible.value = true
 }
 
-// 🆕 處理下拉選單的指令 (編輯/刪除)
 const handleCommand = (command, policy) => {
   if (command === 'edit') {
     isEdit.value = true
@@ -232,7 +202,6 @@ const handleCommand = (command, policy) => {
   }
 }
 
-// 🆕 刪除保單
 const deletePolicy = async (id, name) => {
   try {
     await ElMessageBox.confirm(`刪除保單「${name}」將會一併刪除其所有繳費紀錄，確定嗎？`, '警告', { type: 'warning', confirmButtonText: '確定刪除', cancelButtonText: '取消' })
@@ -260,57 +229,104 @@ const submitForm = async () => {
     type: form.value.type
   }
 
-  let error
   if (isEdit.value) {
     // 更新
-    const res = await supabase.from('insurance_policies').update(payload).eq('id', form.value.id)
-    error = res.error
+    const { error } = await supabase.from('insurance_policies').update(payload).eq('id', form.value.id)
+    if (error) ElMessage.error('更新失敗：' + error.message)
+    else {
+      ElMessage.success('✅ 保單已更新')
+      dialogVisible.value = false
+      fetchData()
+    }
   } else {
-    // 新增
-    const res = await supabase.from('insurance_policies').insert([{
-      family_id: '00000000-0000-0000-0000-000000000001',
+    // 新增保單
+    const familyId = '00000000-0000-0000-0000-000000000001'
+    const { data: newPolicy, error } = await supabase.from('insurance_policies').insert([{
+      family_id: familyId,
       ...payload
-    }])
-    error = res.error
-  }
+    }]).select().single()
 
-  submitting.value = false
-  
-  if (error) {
-    ElMessage.error('儲存失敗：' + error.message)
-  } else {
-    ElMessage.success(isEdit.value ? '✅ 保單已更新' : '✅ 保單已新增')
-    dialogVisible.value = false
-    fetchData()
+    if (error) {
+      ElMessage.error('新增失敗：' + error.message)
+    } else {
+      // 🆕 自動生成歷史待辦
+      try {
+        const start = new Date(form.value.start_date)
+        const now = new Date()
+        
+        // 計算要生成到哪一個月
+        const endMonthStr = currentYearMonth.value // 生成到當前月份
+        
+        let current = new Date(start.getFullYear(), start.getMonth(), 1)
+        const end = new Date(now.getFullYear(), now.getMonth(), 1)
+        
+        const paymentsToInsert = []
+        
+        while (current <= end) {
+          const yyyy = current.getFullYear()
+          const mm = String(current.getMonth() + 1).padStart(2, '0')
+          const ym = `${yyyy}-${mm}`
+          
+          paymentsToInsert.push({
+            policy_id: newPolicy.id,
+            year_month: ym,
+            status: '未轉'
+          })
+          
+          current.setMonth(current.getMonth() + 1)
+        }
+
+        if (paymentsToInsert.length > 0) {
+          const { error: insErr } = await supabase.from('insurance_payments').insert(paymentsToInsert)
+          if (insErr) console.error('自動生成歷史紀錄失敗', insErr)
+        }
+      } catch (e) {
+        console.error('生成歷史邏輯錯誤', e)
+      }
+
+      ElMessage.success('✅ 保單已新增，並已生成歷史待辦')
+      dialogVisible.value = false
+      fetchData()
+    }
   }
+  submitting.value = false
 }
 
 onMounted(() => fetchData())
 </script>
 
 <style scoped>
-/* 樣式保持不變，僅增加 header-right 以對齊按鈕 */
 .insurance-container { width: 100%; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.page-header h2 { margin: 0; color: #1e293b; }
-.policy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-.policy-card { border-radius: 12px; border: none; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
-.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-header h2 { margin: 0; color: #1e293b; font-size: 24px; font-weight: 700; }
+
+.mb-24 { margin-bottom: 24px; }
+
+/* 統計卡片 */
+.stat-card { border-radius: 20px; border: none; background: #ffffff; }
+.stat-content { display: flex; align-items: center; padding: 8px; }
+.stat-icon { width: 56px; height: 56px; border-radius: 16px; background: #EFF6FF; color: #3B82F6; display: flex; justify-content: center; align-items: center; font-size: 28px; margin-right: 20px; }
+.stat-label { font-size: 14px; color: #64748b; margin-bottom: 4px; }
+.stat-value { font-size: 24px; font-weight: bold; }
+.text-blue { color: #3B82F6; }
+
+/* 保單列表網格 */
+.policy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+.policy-card { border-radius: 20px; border: 1px solid rgba(0,0,0,0.03); box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; }
 .header-right { display: flex; align-items: center; }
-.title-area h3 { margin: 0 0 4px 0; color: #0f172a; font-size: 16px; }
-.company { font-size: 12px; color: #64748b; }
-.card-body { display: flex; flex-direction: column; gap: 8px; }
+.title-area h3 { margin: 0 0 6px 0; color: #1e293b; font-size: 18px; font-weight: 700; }
+.company { font-size: 13px; color: #64748b; }
+.card-body { display: flex; flex-direction: column; gap: 10px; }
 .info-row { display: flex; justify-content: space-between; font-size: 14px; }
 .label { color: #64748b; }
 .value { font-weight: 600; color: #334155; }
-.text-blue { color: #1d4ed8; }
-.progress-area { margin-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; }
-.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
-.status-info { font-size: 13px; color: #64748b; display: flex; align-items: center; gap: 6px; }
-.preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px 15px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 10px; }
+.progress-area { margin-top: 12px; background: #F8FAFC; padding: 12px 16px; border-radius: 12px; }
+.preview-box { background: #EEF2FF; color: #6366F1; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 12px; }
 </style>
+
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/InsuranceView.vue
-V: 1793809400
-W: ai-wa-fs-001
+V: 1793971500
+W: ai-wa-fs-002
 ═══ -->
