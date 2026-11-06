@@ -51,6 +51,10 @@
 
         <div class="card-body">
           <div class="info-row">
+            <span class="label">持有人</span>
+            <span class="value">{{ p.holder_name || '家庭共用' }}</span>
+          </div>
+          <div class="info-row">
             <span class="label">本期月均</span>
             <span class="value text-blue">HK$ {{ p.monthly_average.toLocaleString() }}</span>
           </div>
@@ -84,6 +88,25 @@
         <el-form-item label="保險公司">
           <el-input v-model="form.company" placeholder="例如：宏利" />
         </el-form-item>
+        
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="持有人" required>
+              <el-select v-model="form.holder_name" style="width: 100%" placeholder="請選擇">
+                <el-option v-for="m in members" :key="m.id" :label="m.name" :value="m.name" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="保單類型" required>
+              <el-radio-group v-model="form.type">
+                <el-radio label="normal">普通保險</el-radio>
+                <el-radio label="fund_insurance">基金保險</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="開始日期" required>
@@ -96,6 +119,7 @@
             </el-form-item>
           </el-col>
         </el-row>
+        
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="繳費頻率" required>
@@ -111,12 +135,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="保單類型" required>
-          <el-radio-group v-model="form.type">
-            <el-radio label="normal">普通保險</el-radio>
-            <el-radio label="fund_insurance">基金保險</el-radio>
-          </el-radio-group>
-        </el-form-item>
+        
         <div v-if="form.premium_amount > 0" class="preview-box">
           <el-icon><InfoFilled /></el-icon>
           <span>系統將自動平攤：每月約 <strong>HK$ {{ computedMonthlyAverage.toLocaleString() }}</strong></span>
@@ -140,6 +159,7 @@ import { Loading, InfoFilled, MoreFilled, Money } from '@element-plus/icons-vue'
 
 const policies = ref([])
 const payments = ref([]) 
+const members = ref([]) // 🆕 儲存成員列表
 const loading = ref(true)
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -167,14 +187,15 @@ const getProgress = (p) => {
   }
 }
 
-const form = ref({ id: null, name: '', company: '', start_date: '', total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' })
+const form = ref({ id: null, name: '', company: '', holder_name: '', start_date: '', total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' })
 const computedMonthlyAverage = computed(() => form.value.payment_freq === '年繳' ? Math.round((form.value.premium_amount || 0) / 12) : (form.value.premium_amount || 0))
 
 const fetchData = async () => {
   loading.value = true
-  const [policiesRes, paymentsRes] = await Promise.all([
+  const [policiesRes, paymentsRes, membersRes] = await Promise.all([
     supabase.from('insurance_policies').select('*').order('created_at', { ascending: false }),
-    supabase.from('insurance_payments').select('*')
+    supabase.from('insurance_payments').select('*'),
+    supabase.from('members').select('*').order('created_at', { ascending: true })
   ])
 
   if (policiesRes.error) ElMessage.error('載入保單失敗')
@@ -183,12 +204,17 @@ const fetchData = async () => {
   if (paymentsRes.error) ElMessage.error('載入狀態失敗')
   else payments.value = paymentsRes.data || []
 
+  if (!membersRes.error && membersRes.data) {
+    members.value = membersRes.data
+  }
+
   loading.value = false
 }
 
 const openAddDialog = () => {
   isEdit.value = false
-  form.value = { id: null, name: '', company: '', start_date: new Date().toISOString().split('T')[0], total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' }
+  const defaultHolder = members.value.length > 0 ? members.value[0].name : ''
+  form.value = { id: null, name: '', company: '', holder_name: defaultHolder, start_date: new Date().toISOString().split('T')[0], total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' }
   dialogVisible.value = true
 }
 
@@ -214,7 +240,7 @@ const deletePolicy = async (id, name) => {
   }
 }
 
-// 🆕 自動比對並補齊歷史繳費紀錄
+// 自動比對並補齊歷史繳費紀錄
 const syncInsurancePayments = async (policy) => {
   if (!policy || !policy.start_date) return
   
@@ -266,11 +292,14 @@ const syncInsurancePayments = async (policy) => {
 
 const submitForm = async () => {
   if (!form.value.name || !form.value.start_date || form.value.premium_amount <= 0) return ElMessage.warning('請填寫完整資訊')
+  if (!form.value.holder_name) return ElMessage.warning('請選擇持有人')
+  
   submitting.value = true
   
   const payload = {
     name: form.value.name, 
     company: form.value.company, 
+    holder_name: form.value.holder_name, // 🆕 寫入持有人
     start_date: form.value.start_date,
     total_years: form.value.total_years, 
     payment_freq: form.value.payment_freq,
@@ -285,7 +314,7 @@ const submitForm = async () => {
     if (error) {
       ElMessage.error('更新失敗：' + error.message)
     } else {
-      // 🆕 編輯後同步補齊
+      // 編輯後同步補齊
       await syncInsurancePayments({ id: form.value.id, start_date: form.value.start_date })
       ElMessage.success('✅ 保單已更新')
       dialogVisible.value = false
@@ -302,7 +331,7 @@ const submitForm = async () => {
     if (error) {
       ElMessage.error('新增失敗：' + error.message)
     } else {
-      // 🆕 新增後生成歷史
+      // 新增後生成歷史
       await syncInsurancePayments(newPolicy)
       ElMessage.success('✅ 保單已新增，並已生成歷史待辦')
       dialogVisible.value = false
@@ -347,6 +376,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/InsuranceView.vue
-V: 1793972000
+V: 1793972100
 W: ai-wa-fs-002
 ═══ -->
