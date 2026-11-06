@@ -196,7 +196,7 @@ const allPendingItems = computed(() => {
           type: 'insurance',
           year_month: ip.year_month,
           name: `保險供款：${p.name}`,
-          payer: '保險公司', // 保險沒有對象，給個預設
+          payer: p.holder_name || '家庭共用', // 🆕 改為讀取持有人
           category: '保險',
           amount: Number(p.monthly_average),
           created_at: ip.created_at
@@ -239,7 +239,7 @@ const doneItems = computed(() => {
           type: 'insurance',
           year_month: ip.year_month,
           name: `保險供款：${p.name}`,
-          payer: '保險公司',
+          payer: p.holder_name || '家庭共用', // 🆕 改為讀取持有人
           amount: Number(p.monthly_average)
         })
       }
@@ -479,6 +479,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1793971400
+V: 1793972200
 W: ai-wa-fs-002
 ═══ -->
