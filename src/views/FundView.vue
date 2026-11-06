@@ -41,14 +41,22 @@
     <div v-else class="fund-grid">
       <el-card v-for="fund in funds" :key="fund.id" class="fund-card" shadow="hover">
         <div class="card-header">
-          <h3>{{ fund.name }}</h3>
+          <div>
+            <h3>{{ fund.name }}</h3>
+            <div class="linked-policy" v-if="fund.policy_id">
+              <el-tag size="small" type="warning">關聯保單：{{ getPolicyName(fund.policy_id) }} ({{ fund.allocation_pct }}%)</el-tag>
+            </div>
+            <div class="linked-policy" v-else>
+              <el-tag size="small" type="info">獨立基金</el-tag>
+            </div>
+          </div>
           <el-button type="danger" text size="small" @click="deleteFund(fund.id)">刪除</el-button>
         </div>
         
         <div class="card-body">
           <div class="info-row">
-            <span class="label">投入成本</span>
-            <span class="value">HK$ {{ fund.manual_cost.toLocaleString() }}</span>
+            <span class="label">推算投入成本</span>
+            <span class="value">HK$ {{ getFundCost(fund).toLocaleString() }}</span>
           </div>
           <div class="info-row">
             <span class="label">當前現值</span>
@@ -72,14 +80,38 @@
     </div>
 
     <!-- 新增基金彈窗 -->
-    <el-dialog v-model="fundDialogVisible" title="新增基金" width="90%" max-width="400px">
+    <el-dialog v-model="fundDialogVisible" title="新增基金" width="90%" max-width="450px">
       <el-form :model="fundForm" label-position="top">
         <el-form-item label="基金名稱" required>
           <el-input v-model="fundForm.name" placeholder="例如：駿利亨德森遠見基金" />
         </el-form-item>
-        <el-form-item label="投入成本 (HKD)" required>
-          <el-input-number v-model="fundForm.manual_cost" :min="0" style="width: 100%" />
+        
+        <el-form-item label="是否為基金保險的關聯基金？">
+          <el-switch v-model="isLinkedToPolicy" active-text="關聯保單" inactive-text="獨立基金" />
         </el-form-item>
+
+        <!-- 關聯保單設定 -->
+        <template v-if="isLinkedToPolicy">
+          <el-form-item label="選擇關聯保單" required>
+            <el-select v-model="fundForm.policy_id" style="width: 100%" placeholder="請選擇基金保險保單">
+              <el-option v-for="p in fundPolicies" :key="p.id" :label="p.name" :value="p.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="分配比例 (%)" required>
+            <el-input-number v-model="fundForm.allocation_pct" :min="0" :max="100" style="width: 100%" />
+          </el-form-item>
+          <div class="preview-box" style="margin-bottom: 15px;">
+            <el-icon><InfoFilled /></el-icon>
+            <span>系統將根據保單的供款進度與此比例，自動推算你的投入成本。</span>
+          </div>
+        </template>
+
+        <!-- 獨立基金手動輸入成本 -->
+        <template v-else>
+          <el-form-item label="手動輸入成本 (HKD)" required>
+            <el-input-number v-model="fundForm.manual_cost" :min="0" style="width: 100%" />
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="fundDialogVisible = false">取消</el-button>
@@ -132,16 +164,19 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, InfoFilled } from '@element-plus/icons-vue'
 
 const funds = ref([])
 const snapshots = ref([])
+const policies = ref([]) // 🆕 儲存所有保單
 const loading = ref(false)
 const submitting = ref(false)
 const fundDialogVisible = ref(false)
 const snapshotDialogVisible = ref(false)
 
-const fundForm = ref({ name: '', manual_cost: 0 })
+// 表單狀態
+const isLinkedToPolicy = ref(false)
+const fundForm = ref({ name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 })
 const snapshotForm = ref({
   fund_id: '',
   year_month: new Date().toISOString().slice(0, 7),
@@ -150,7 +185,43 @@ const snapshotForm = ref({
   exchange_rate: 7.8
 })
 
-const totalCost = computed(() => funds.value.reduce((sum, f) => sum + Number(f.manual_cost), 0))
+// 篩選出「基金保險」類型的保單
+const fundPolicies = computed(() => {
+  return policies.value.filter(p => p.type === 'fund_insurance')
+})
+
+// 取得關聯保單名稱
+const getPolicyName = (policyId) => {
+  const p = policies.value.find(x => x.id === policyId)
+  return p ? p.name : '未知保單'
+}
+
+// 🆕 自動推算基金成本
+const getFundCost = (fund) => {
+  if (!fund.policy_id) {
+    return Number(fund.manual_cost) || 0
+  }
+  
+  const policy = policies.value.find(p => p.id === fund.policy_id)
+  if (!policy) return Number(fund.manual_cost) || 0
+
+  // 計算保單從開始到現在，已經供款了幾個月
+  const start = new Date(policy.start_date)
+  const now = new Date()
+  const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
+  const paidMonths = Math.max(0, diffMonths + 1) // 最少 0 個月
+
+  // 保單總投入 = 月均 * 月數
+  const totalPolicyCost = Number(policy.monthly_average) * paidMonths
+  
+  // 基金成本 = 保單總投入 * 分配比例
+  const fundCost = totalPolicyCost * (Number(fund.allocation_pct) / 100)
+  
+  return Math.round(fundCost)
+}
+
+// 總計計算
+const totalCost = computed(() => funds.value.reduce((sum, f) => sum + getFundCost(f), 0))
 const totalValue = computed(() => funds.value.reduce((sum, f) => sum + getLatestValue(f), 0))
 const totalPnl = computed(() => totalValue.value - totalCost.value)
 
@@ -166,7 +237,7 @@ const getLatestValue = (fund) => {
 }
 
 const getPnl = (fund) => {
-  return getLatestValue(fund) - Number(fund.manual_cost)
+  return getLatestValue(fund) - getFundCost(fund)
 }
 
 const computedSnapshotValue = computed(() => {
@@ -176,29 +247,49 @@ const computedSnapshotValue = computed(() => {
 
 const fetchData = async () => {
   loading.value = true
-  const [fundRes, snapRes] = await Promise.all([
+  const [fundRes, snapRes, polRes] = await Promise.all([
     supabase.from('funds').select('*').order('created_at', { ascending: false }),
-    supabase.from('fund_snapshots').select('*')
+    supabase.from('fund_snapshots').select('*'),
+    supabase.from('insurance_policies').select('*').order('created_at', { ascending: false })
   ])
   if (!fundRes.error) funds.value = fundRes.data || []
   if (!snapRes.error) snapshots.value = snapRes.data || []
+  if (!polRes.error) policies.value = polRes.data || []
   loading.value = false
 }
 
 const openFundDialog = () => {
-  fundForm.value = { name: '', manual_cost: 0 }
+  isLinkedToPolicy.value = false
+  fundForm.value = { name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 }
   fundDialogVisible.value = true
 }
 
 const submitFund = async () => {
   if (!fundForm.value.name) return ElMessage.warning('請輸入名稱')
-  submitting.value = true
-  const { error } = await supabase.from('funds').insert([{
+  
+  let payload = {
     family_id: '00000000-0000-0000-0000-000000000001',
     name: fundForm.value.name,
-    manual_cost: fundForm.value.manual_cost
-  }])
+    policy_id: null,
+    allocation_pct: 0,
+    manual_cost: 0
+  }
+
+  if (isLinkedToPolicy.value) {
+    if (!fundForm.value.policy_id || fundForm.value.allocation_pct <= 0) {
+      return ElMessage.warning('請選擇保單並填寫大於 0 的分配比例')
+    }
+    payload.policy_id = fundForm.value.policy_id
+    payload.allocation_pct = fundForm.value.allocation_pct
+  } else {
+    if (fundForm.value.manual_cost <= 0) return ElMessage.warning('請輸入投入成本')
+    payload.manual_cost = fundForm.value.manual_cost
+  }
+
+  submitting.value = true
+  const { error } = await supabase.from('funds').insert([payload])
   submitting.value = false
+  
   if (error) ElMessage.error('失敗：' + error.message)
   else {
     ElMessage.success('✅ 基金已新增')
@@ -266,15 +357,11 @@ onMounted(() => fetchData())
 .text-green { color: #10b981; }
 .text-blue { color: #3b82f6; }
 
-/* 電腦版：網格排列 */
-.fund-grid { 
-  display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
-  gap: 16px; 
-}
+.fund-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .fund-card { border-radius: 12px; border: none; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
-.card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px; }
-.card-header h3 { margin: 0; font-size: 16px; color: #0f172a; }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px; }
+.card-header h3 { margin: 0 0 5px 0; font-size: 16px; color: #0f172a; }
+.linked-policy { font-size: 12px; }
 
 .card-body { display: flex; flex-direction: column; gap: 8px; }
 .info-row { display: flex; justify-content: space-between; font-size: 14px; }
@@ -286,28 +373,17 @@ onMounted(() => fetchData())
 .pnl-negative { background: #fef2f2; color: #ef4444; }
 
 .latest-info { font-size: 12px; color: #94a3b8; margin-top: 5px; text-align: right; }
-.preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px; border-radius: 6px; font-size: 14px; text-align: center; }
+.preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px 15px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
 
-/* 🚨 手機端優化：橫向滑動 */
+/* 手機端優化 */
 @media (max-width: 768px) {
   .header-actions { width: 100%; justify-content: flex-end; margin-top: 10px; }
-  
-  .fund-grid {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 12px;
-    gap: 12px;
-  }
-  .fund-card {
-    flex: 0 0 85%; /* 卡片寬度佔 85%，露出下一張邊緣提示可以滑動 */
-    min-width: 280px;
-  }
+  .fund-grid { display: flex; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 12px; gap: 12px; }
+  .fund-card { flex: 0 0 85%; min-width: 280px; }
 }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/FundView.vue
-V: 1793808000
+V: 1793809700
 W: ai-wa-fs-001
 ═══ -->
