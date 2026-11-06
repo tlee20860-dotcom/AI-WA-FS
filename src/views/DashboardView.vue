@@ -6,7 +6,7 @@
     </div>
 
     <div v-loading="loading">
-      <!-- 🆕 頂部核心資產看板 -->
+      <!-- 頂部核心資產看板 -->
       <el-row :gutter="15" class="mb-20">
         <el-col :xs="24" :sm="12">
           <el-card shadow="never" class="total-asset-card">
@@ -138,6 +138,35 @@
           </el-card>
         </el-col>
       </el-row>
+
+      <!-- 🆕 支出類別分析 -->
+      <el-row v-if="categoryStats.length > 0">
+        <el-col :span="24" class="mb-20">
+          <el-card shadow="never" class="panel-card">
+            <template #header>
+              <div class="panel-header">
+                <span>本月支出類別分析</span>
+              </div>
+            </template>
+            <div class="category-list">
+              <div class="category-item" v-for="cat in categoryStats" :key="cat.name">
+                <div class="cat-header">
+                  <span class="cat-name">{{ cat.name }}</span>
+                  <span class="cat-amount">HK$ {{ cat.amount.toLocaleString() }} ({{ cat.percent }}%)</span>
+                </div>
+                <el-progress 
+                  :percentage="cat.percent" 
+                  :color="cat.color" 
+                  :show-text="false" 
+                  :stroke-width="10" 
+                  style="margin-top: 5px;"
+                />
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+
     </div>
   </div>
 </template>
@@ -164,6 +193,10 @@ const prevBalance = ref(0)
 const actualBalance = ref(0)
 const inputActualBalance = ref(0)
 
+// 🆕 分類統計狀態
+const categoryStats = ref([])
+const categoryColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
+
 const currentMonthText = computed(() => {
   const d = new Date()
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`
@@ -180,9 +213,7 @@ const prevYearMonth = computed(() => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 })
 
-// 🆕 計算家庭總資產
 const totalAssets = computed(() => {
-  // 如果有本月實際結餘就用本月的，否則用上月結餘推算
   const bankBalance = actualBalance.value > 0 ? actualBalance.value : calculatedBalance.value
   return bankBalance + totalFundValue.value
 })
@@ -200,16 +231,36 @@ const fetchDashboardData = async () => {
   const familyId = '00000000-0000-0000-0000-000000000001'
 
   try {
-    // 1. 抓取本月收支
+    // 1. 抓取本月收支 (包含分類)
     const [incRes, expRes] = await Promise.all([
       supabase.from('incomes').select('amount').eq('year_month', currentYearMonth.value),
-      supabase.from('expenses').select('amount, status').eq('year_month', currentYearMonth.value)
+      supabase.from('expenses').select('amount, status, category_name').eq('year_month', currentYearMonth.value)
     ])
 
     if (incRes.data) totalIncome.value = incRes.data.reduce((sum, item) => sum + Number(item.amount), 0)
+    
     if (expRes.data) {
       totalExpense.value = expRes.data.reduce((sum, item) => sum + Number(item.amount), 0)
       pendingExpenseCount.value = expRes.data.filter(item => item.status !== '已處理').length
+
+      // 🆕 計算分類佔比
+      const catMap = {}
+      expRes.data.forEach(item => {
+        const cName = item.category_name || '未分類'
+        if (!catMap[cName]) catMap[cName] = 0
+        catMap[cName] += Number(item.amount)
+      })
+
+      const sortedCats = Object.entries(catMap)
+        .map(([name, amount], index) => ({
+          name,
+          amount,
+          percent: Math.round((amount / totalExpense.value) * 100),
+          color: categoryColors[index % categoryColors.length]
+        }))
+        .sort((a, b) => b.amount - a.amount)
+
+      categoryStats.value = sortedCats
     }
 
     // 2. 抓取結餘資料
@@ -301,7 +352,7 @@ onMounted(() => {
 
 .mb-20 { margin-bottom: 20px; }
 
-/* 🆕 總資產卡片 */
+/* 總資產卡片 */
 .total-asset-card { border-radius: 12px; border: none; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; }
 .asset-label { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
 .asset-value { font-size: 28px; font-weight: bold; font-family: monospace; }
@@ -348,6 +399,12 @@ onMounted(() => {
 .input-row .label { font-size: 14px; font-weight: bold; color: #334155; }
 .diff-row { display: flex; align-items: center; margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 6px; }
 
+/* 🆕 分類分析樣式 */
+.category-list { display: flex; flex-direction: column; gap: 15px; }
+.category-item { display: flex; flex-direction: column; }
+.cat-header { display: flex; justify-content: space-between; font-size: 14px; color: #334155; font-weight: 500; }
+.cat-amount { font-family: monospace; }
+
 /* 手機端優化 */
 @media (max-width: 768px) {
   .asset-value { font-size: 24px; }
@@ -359,6 +416,6 @@ onMounted(() => {
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/DashboardView.vue
-V: 1793811000
+V: 1793811300
 W: ai-wa-fs-001
 ═══ -->
