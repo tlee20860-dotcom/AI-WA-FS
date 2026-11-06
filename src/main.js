@@ -6,6 +6,9 @@ import App from './App.vue'
 import router from './router'
 import './style.css'
 
+// 🆕 引入 PWA 註冊函式
+import { registerSW } from 'virtual:pwa-register'
+
 const app = createApp(App)
 
 app.use(ElementPlus, { locale: zhTw })
@@ -13,17 +16,20 @@ app.use(router)
 
 app.mount('#app')
 
-// 🚨 強制反註冊所有舊的 Service Worker，徹底清除快取干擾
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for(let registration of registrations) {
-      registration.unregister();
+// 🆕 註冊 Service Worker 並設定自動更新
+const updateSW = registerSW({
+  onNeedRefresh() {
+    if (confirm('發現新版本，是否立即更新？')) {
+      updateSW(true)
     }
-  });
-}
+  },
+  onOfflineReady() {
+    console.log('✅ App 已可離線使用')
+  },
+})
 
 /* ═══ EOF ═══
 F: AI-WA-FS/src/main.js
-V: 1793806100
+V: 1793810900
 W: ai-wa-fs-001
 ═══ */
