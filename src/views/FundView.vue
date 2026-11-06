@@ -2,7 +2,7 @@
   <div class="fund-container">
     <div class="page-header">
       <h2>基金投資表</h2>
-      <div>
+      <div class="header-actions">
         <el-button @click="openFundDialog()">+ 新增基金</el-button>
         <el-button type="primary" @click="openSnapshotDialog()">+ 輸入快照</el-button>
       </div>
@@ -262,6 +262,7 @@ onMounted(() => fetchData())
 .fund-container { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
 .page-header h2 { margin: 0; color: #1e293b; }
+.header-actions { display: flex; gap: 10px; }
 
 .mb-20 { margin-bottom: 20px; }
 .stat-card { border-radius: 8px; background: #f8fafc; }
@@ -287,9 +288,14 @@ onMounted(() => fetchData())
 
 .latest-info { font-size: 12px; color: #94a3b8; margin-top: 5px; text-align: right; }
 .preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px; border-radius: 6px; font-size: 14px; text-align: center; }
+
+/* 手機端優化 */
+@media (max-width: 768px) {
+  .header-actions { width: 100%; justify-content: flex-end; margin-top: 10px; }
+}
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/FundView.vue
-V: 1793807400
+V: 1793807700
 W: ai-wa-fs-001
-═══ -->
+═══ */
