@@ -34,6 +34,10 @@
           <el-icon><Money /></el-icon>
           <template #title>收支流水</template>
         </el-menu-item>
+        <el-menu-item index="/settlement">
+          <el-icon><Tickets /></el-icon>
+          <template #title>待轉帳表</template>
+        </el-menu-item>
         <el-menu-item index="/insurance">
           <el-icon><Umbrella /></el-icon>
           <template #title>保險供款</template>
@@ -46,7 +50,6 @@
           <el-icon><Document /></el-icon>
           <template #title>年度報表</template>
         </el-menu-item>
-        <!-- 🆕 新增系統設定 -->
         <el-menu-item index="/settings">
           <el-icon><Setting /></el-icon>
           <template #title>系統設定</template>
@@ -74,8 +77,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '@/config/supabase'
-// 🆕 引入 Setting 圖示
-import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document, Setting } from '@element-plus/icons-vue'
+// 🆕 引入 Tickets 圖示
+import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document, Setting, Tickets } from '@element-plus/icons-vue'
 
 const isCollapse = ref(false)
 const isMobile = ref(false)
@@ -180,6 +183,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793809100
+V: 1793810800
 W: ai-wa-fs-001
 ═══ -->
