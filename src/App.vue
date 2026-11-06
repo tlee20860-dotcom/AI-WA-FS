@@ -63,7 +63,6 @@ import { HomeFilled, Money, Umbrella, Menu, TrendCharts } from '@element-plus/ic
 const isCollapse = ref(false)
 const isMobile = ref(false)
 
-// 偵測是否為手機版，並預設收起側邊欄
 const checkScreenSize = () => {
   isMobile.value = window.innerWidth < 768
   if (isMobile.value) {
@@ -73,7 +72,6 @@ const checkScreenSize = () => {
   }
 }
 
-// 點擊選單後，如果是手機版就自動收起
 const onMenuSelect = () => {
   if (isMobile.value) {
     isCollapse.value = true
@@ -96,49 +94,64 @@ onUnmounted(() => {
 </script>
 
 <style>
-body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; }
-.app-layout { height: 100vh; overflow: hidden; position: relative; }
+body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; }
 
-/* 側邊欄基礎樣式 */
-.sidebar { 
-  background-color: #1e293b; 
-  color: white; 
-  transition: width 0.3s; 
-  z-index: 1000;
-}
+/* 電腦版佈局 */
+.app-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+.sidebar { background-color: #1e293b; color: white; transition: width 0.3s; z-index: 1000; }
 .logo { height: 60px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #334155; overflow: hidden; }
 .logo h2 { margin: 0; font-size: 18px; color: #f8fafc; white-space: nowrap; }
 .sidebar .el-menu { border-right: none; }
 
-/* 主內容區 */
 .main-wrapper { flex: 1; width: 0; overflow: hidden; display: flex; flex-direction: column; }
 .header { background-color: white; display: flex; align-items: center; border-bottom: 1px solid #e2e8f0; padding: 0 15px; height: 60px; flex-shrink: 0; }
 .header-title { font-weight: bold; color: #334155; margin-left: 10px; flex: 1; }
 .main-content { background-color: #f1f5f9; padding: 15px; overflow-y: auto; flex: 1; }
 .menu-toggle { margin-right: 10px; color: #64748b; padding: 8px; }
 
-/* 🚨 手機端專用樣式 */
+/* 🚨 手機端佈局：解除高度限制，恢復瀏覽器原生滑動 */
 @media (max-width: 768px) {
+  .app-layout { 
+    display: block; 
+    height: auto; 
+    min-height: 100vh; 
+    overflow: visible; 
+  }
+  .main-wrapper { 
+    display: block; 
+    width: 100%; 
+    height: auto; 
+  }
+  .main-content { 
+    padding: 10px; 
+    overflow-y: visible; 
+    height: auto; 
+    padding-bottom: 50px; /* 預留底部空間 */
+  }
+  
+  /* 手機端側邊欄浮動 */
   .mobile-sidebar {
-    position: absolute;
-    height: 100vh;
-    left: 0;
+    position: fixed;
     top: 0;
+    left: 0;
+    height: 100vh;
     box-shadow: 2px 0 8px rgba(0,0,0,0.2);
   }
   .sidebar-mask {
-    position: absolute;
+    position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.5);
     z-index: 999;
   }
-  .main-content {
-    padding: 10px;
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 900;
   }
 }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793807800
+V: 1793808100
 W: ai-wa-fs-001
 ═══ -->
