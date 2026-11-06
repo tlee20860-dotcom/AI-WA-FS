@@ -5,120 +5,140 @@
       <span class="date-text">{{ currentMonthText }}</span>
     </div>
 
-    <!-- 核心數據統計 -->
-    <el-row :gutter="15" class="mb-20" v-loading="loading">
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card income-card">
-          <div class="stat-icon"><el-icon><TrendCharts /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-label">本月總收入</div>
-            <div class="stat-value text-green">HK$ {{ totalIncome.toLocaleString() }}</div>
-          </div>
-        </el-card>
-      </el-col>
-      
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card expense-card">
-          <div class="stat-icon"><el-icon><Bottom /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-label">本月總支出</div>
-            <div class="stat-value text-red">HK$ {{ totalExpense.toLocaleString() }}</div>
-          </div>
-        </el-card>
-      </el-col>
+    <div v-loading="loading">
+      <!-- 🆕 頂部核心資產看板 -->
+      <el-row :gutter="15" class="mb-20">
+        <el-col :xs="24" :sm="12">
+          <el-card shadow="never" class="total-asset-card">
+            <div class="asset-label">家庭當前總資產 (銀行結餘 + 基金)</div>
+            <div class="asset-value">HK$ {{ totalAssets.toLocaleString() }}</div>
+          </el-card>
+        </el-col>
+        <el-col :xs="24" :sm="12">
+          <el-card shadow="never" class="asset-change-card">
+            <div class="asset-label">本月淨資產變化</div>
+            <div class="asset-value" :class="(totalIncome - totalExpense) >= 0 ? 'text-green' : 'text-red'">
+              {{ (totalIncome - totalExpense) >= 0 ? '+' : '' }} HK$ {{ (totalIncome - totalExpense).toLocaleString() }}
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
 
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card pending-card">
-          <div class="stat-icon"><el-icon><Warning /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-label">待繳保費</div>
-            <div class="stat-value text-orange">HK$ {{ pendingInsurance.toLocaleString() }}</div>
-          </div>
-        </el-card>
-      </el-col>
+      <!-- 收支與保費統計 -->
+      <el-row :gutter="15" class="mb-20">
+        <el-col :xs="12" :sm="6">
+          <el-card shadow="never" class="stat-card income-card">
+            <div class="stat-icon"><el-icon><TrendCharts /></el-icon></div>
+            <div class="stat-info">
+              <div class="stat-label">本月總收入</div>
+              <div class="stat-value text-green">HK$ {{ totalIncome.toLocaleString() }}</div>
+            </div>
+          </el-card>
+        </el-col>
+        
+        <el-col :xs="12" :sm="6">
+          <el-card shadow="never" class="stat-card expense-card">
+            <div class="stat-icon"><el-icon><Bottom /></el-icon></div>
+            <div class="stat-info">
+              <div class="stat-label">本月總支出</div>
+              <div class="stat-value text-red">HK$ {{ totalExpense.toLocaleString() }}</div>
+            </div>
+          </el-card>
+        </el-col>
 
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card asset-card">
-          <div class="stat-icon"><el-icon><Wallet /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-label">基金總現值</div>
-            <div class="stat-value text-blue">HK$ {{ totalFundValue.toLocaleString() }}</div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        <el-col :xs="12" :sm="6">
+          <el-card shadow="never" class="stat-card pending-card">
+            <div class="stat-icon"><el-icon><Warning /></el-icon></div>
+            <div class="stat-info">
+              <div class="stat-label">待繳保費</div>
+              <div class="stat-value text-orange">HK$ {{ pendingInsurance.toLocaleString() }}</div>
+            </div>
+          </el-card>
+        </el-col>
 
-    <el-row :gutter="15">
-      <!-- 🆕 銀行結餘對帳工具 -->
-      <el-col :xs="24" :md="12" class="mb-20">
-        <el-card shadow="never" class="panel-card">
-          <template #header>
-            <div class="panel-header">
-              <span>本月結餘對帳</span>
-              <el-tag v-if="isReconciled" type="success" size="small">✅ 已對帳</el-tag>
-              <el-tag v-else type="danger" size="small">⚠️ 未對帳</el-tag>
+        <el-col :xs="12" :sm="6">
+          <el-card shadow="never" class="stat-card fund-card">
+            <div class="stat-icon"><el-icon><Wallet /></el-icon></div>
+            <div class="stat-info">
+              <div class="stat-label">基金總現值</div>
+              <div class="stat-value text-blue">HK$ {{ totalFundValue.toLocaleString() }}</div>
             </div>
-          </template>
-          
-          <div class="reconcile-box">
-            <div class="calc-row">
-              <span>上月實際結餘</span>
-              <span class="mono">HK$ {{ prevBalance.toLocaleString() }}</span>
-            </div>
-            <div class="calc-row">
-              <span>本月收支淨額 (+ -)</span>
-              <span class="mono" :class="(totalIncome - totalExpense) >= 0 ? 'text-green' : 'text-red'">
-                {{ (totalIncome - totalExpense) >= 0 ? '+' : '' }} HK$ {{ (totalIncome - totalExpense).toLocaleString() }}
-              </span>
-            </div>
-            <div class="calc-row highlight">
-              <span>系統推算結餘</span>
-              <span class="mono">HK$ {{ calculatedBalance.toLocaleString() }}</span>
-            </div>
+          </el-card>
+        </el-col>
+      </el-row>
 
-            <el-divider style="margin: 12px 0;" />
+      <el-row :gutter="15">
+        <!-- 銀行結餘對帳工具 -->
+        <el-col :xs="24" :md="12" class="mb-20">
+          <el-card shadow="never" class="panel-card">
+            <template #header>
+              <div class="panel-header">
+                <span>本月結餘對帳</span>
+                <el-tag v-if="isReconciled" type="success" size="small">✅ 已對帳</el-tag>
+                <el-tag v-else type="danger" size="small">⚠️ 未對帳</el-tag>
+              </div>
+            </template>
+            
+            <div class="reconcile-box">
+              <div class="calc-row">
+                <span>上月實際結餘</span>
+                <span class="mono">HK$ {{ prevBalance.toLocaleString() }}</span>
+              </div>
+              <div class="calc-row">
+                <span>本月收支淨額</span>
+                <span class="mono" :class="(totalIncome - totalExpense) >= 0 ? 'text-green' : 'text-red'">
+                  {{ (totalIncome - totalExpense) >= 0 ? '+' : '' }} HK$ {{ (totalIncome - totalExpense).toLocaleString() }}
+                </span>
+              </div>
+              <div class="calc-row highlight">
+                <span>系統推算本月結餘</span>
+                <span class="mono">HK$ {{ calculatedBalance.toLocaleString() }}</span>
+              </div>
 
-            <div class="input-row">
-              <span class="label">輸入月結單實際結餘：</span>
-              <el-input-number v-model="inputActualBalance" :controls="false" style="width: 140px" placeholder="輸入金額" />
-              <el-button type="primary" @click="saveActualBalance" :loading="savingBalance">儲存</el-button>
-            </div>
+              <el-divider style="margin: 12px 0;" />
 
-            <div class="diff-row" v-if="inputActualBalance > 0">
-              <span>差異金額：</span>
-              <span :class="Math.abs(inputActualBalance - calculatedBalance) < 1 ? 'text-green font-bold' : 'text-red font-bold'">
-                HK$ {{ Math.abs(inputActualBalance - calculatedBalance).toLocaleString() }}
-              </span>
-              <span v-if="Math.abs(inputActualBalance - calculatedBalance) >= 1" class="text-muted" style="font-size:12px; margin-left:8px;">(請檢查是否有漏記)</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
+              <div class="input-row">
+                <span class="label">月結單實際結餘：</span>
+                <el-input-number v-model="inputActualBalance" :controls="false" style="width: 140px" placeholder="輸入金額" />
+                <el-button type="primary" @click="saveActualBalance" :loading="savingBalance">儲存</el-button>
+              </div>
 
-      <!-- 待處理事項 -->
-      <el-col :xs="24" :md="12" class="mb-20">
-        <el-card shadow="never" class="panel-card">
-          <template #header>
-            <div class="panel-header">
-              <span>待處理事項</span>
+              <div class="diff-row" v-if="inputActualBalance > 0">
+                <span>差異金額：</span>
+                <span :class="Math.abs(inputActualBalance - calculatedBalance) < 1 ? 'text-green font-bold' : 'text-red font-bold'">
+                  HK$ {{ Math.abs(inputActualBalance - calculatedBalance).toLocaleString() }}
+                </span>
+                <span v-if="Math.abs(inputActualBalance - calculatedBalance) >= 1" class="text-muted" style="font-size:12px; margin-left:8px;">(可能有漏記)</span>
+              </div>
             </div>
-          </template>
-          <div class="todo-list">
-            <div class="todo-item" v-if="pendingInsuranceCount > 0">
-              <el-tag type="warning" size="small">保險</el-tag>
-              <span>有 {{ pendingInsuranceCount }} 張保單本月尚未轉帳</span>
-              <el-button type="primary" link @click="$router.push('/insurance')">去處理</el-button>
+          </el-card>
+        </el-col>
+
+        <!-- 待處理事項 -->
+        <el-col :xs="24" :md="12" class="mb-20">
+          <el-card shadow="never" class="panel-card">
+            <template #header>
+              <div class="panel-header">
+                <span>待處理事項</span>
+              </div>
+            </template>
+            <div class="todo-list">
+              <div class="todo-item" v-if="pendingInsuranceCount > 0">
+                <el-tag type="warning" size="small">保險</el-tag>
+                <span>有 {{ pendingInsuranceCount }} 張保單本月尚未轉帳</span>
+                <el-button type="primary" link @click="$router.push('/insurance')">去處理</el-button>
+              </div>
+              <div class="todo-item" v-if="pendingExpenseCount > 0">
+                <el-tag type="danger" size="small">收支</el-tag>
+                <span>有 {{ pendingExpenseCount }} 筆支出尚未結算</span>
+                <el-button type="primary" link @click="$router.push('/settlement')">去處理</el-button>
+              </div>
+              <el-empty v-if="pendingInsuranceCount === 0 && pendingExpenseCount === 0" description="太棒了！目前沒有待處理事項" :image-size="60" />
             </div>
-            <div class="todo-item" v-if="pendingExpenseCount > 0">
-              <el-tag type="danger" size="small">收支</el-tag>
-              <span>有 {{ pendingExpenseCount }} 筆支出尚未結算</span>
-              <el-button type="primary" link @click="$router.push('/cashflow')">去處理</el-button>
-            </div>
-            <el-empty v-if="pendingInsuranceCount === 0 && pendingExpenseCount === 0" description="太棒了！目前沒有待處理事項" :image-size="60" />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
   </div>
 </template>
 
@@ -140,9 +160,9 @@ const pendingInsuranceCount = ref(0)
 const pendingExpenseCount = ref(0)
 
 // 對帳狀態
-const prevBalance = ref(0) // 上月結餘
-const actualBalance = ref(0) // 本月已存的實際結餘
-const inputActualBalance = ref(0) // 正在輸入的結餘
+const prevBalance = ref(0)
+const actualBalance = ref(0)
+const inputActualBalance = ref(0)
 
 const currentMonthText = computed(() => {
   const d = new Date()
@@ -160,12 +180,17 @@ const prevYearMonth = computed(() => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 })
 
-// 系統推算結餘
+// 🆕 計算家庭總資產
+const totalAssets = computed(() => {
+  // 如果有本月實際結餘就用本月的，否則用上月結餘推算
+  const bankBalance = actualBalance.value > 0 ? actualBalance.value : calculatedBalance.value
+  return bankBalance + totalFundValue.value
+})
+
 const calculatedBalance = computed(() => {
   return prevBalance.value + totalIncome.value - totalExpense.value
 })
 
-// 是否已對帳 (差異小於 1 元視為相符)
 const isReconciled = computed(() => {
   return actualBalance.value > 0 && Math.abs(actualBalance.value - calculatedBalance.value) < 1
 })
@@ -181,10 +206,7 @@ const fetchDashboardData = async () => {
       supabase.from('expenses').select('amount, status').eq('year_month', currentYearMonth.value)
     ])
 
-    if (incRes.data) {
-      totalIncome.value = incRes.data.reduce((sum, item) => sum + Number(item.amount), 0)
-    }
-
+    if (incRes.data) totalIncome.value = incRes.data.reduce((sum, item) => sum + Number(item.amount), 0)
     if (expRes.data) {
       totalExpense.value = expRes.data.reduce((sum, item) => sum + Number(item.amount), 0)
       pendingExpenseCount.value = expRes.data.filter(item => item.status !== '已處理').length
@@ -196,12 +218,7 @@ const fetchDashboardData = async () => {
       supabase.from('monthly_balances').select('actual_balance').eq('year_month', currentYearMonth.value).maybeSingle()
     ])
 
-    if (prevRes.data) {
-      prevBalance.value = Number(prevRes.data.actual_balance)
-    } else {
-      prevBalance.value = 0 // 如果沒有上月紀錄，預設為 0
-    }
-
+    prevBalance.value = prevRes.data ? Number(prevRes.data.actual_balance) : 0
     if (currRes.data) {
       actualBalance.value = Number(currRes.data.actual_balance)
       inputActualBalance.value = actualBalance.value
@@ -216,7 +233,6 @@ const fetchDashboardData = async () => {
     if (policiesRes.data) {
       const paidPolicyIds = (paymentsRes.data || []).map(p => p.policy_id)
       const unpaidPolicies = policiesRes.data.filter(p => !paidPolicyIds.includes(p.id))
-      
       pendingInsuranceCount.value = unpaidPolicies.length
       pendingInsurance.value = unpaidPolicies.reduce((sum, p) => sum + Number(p.monthly_average), 0)
     }
@@ -244,7 +260,6 @@ const fetchDashboardData = async () => {
   }
 }
 
-// 🆕 儲存實際結餘
 const saveActualBalance = async () => {
   if (inputActualBalance.value === null || inputActualBalance.value < 0) return ElMessage.warning('請輸入正確金額')
   
@@ -286,19 +301,28 @@ onMounted(() => {
 
 .mb-20 { margin-bottom: 20px; }
 
+/* 🆕 總資產卡片 */
+.total-asset-card { border-radius: 12px; border: none; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; }
+.asset-label { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
+.asset-value { font-size: 28px; font-weight: bold; font-family: monospace; }
+
+.asset-change-card { border-radius: 12px; border: none; background: white; }
+.asset-change-card .asset-label { color: #64748b; }
+.asset-change-card .asset-value { font-size: 28px; font-family: monospace; }
+
 /* 統計卡片樣式 */
 .stat-card { border-radius: 12px; border: none; position: relative; overflow: hidden; }
 .stat-card :deep(.el-card__body) { display: flex; align-items: center; padding: 20px 15px; }
 .stat-icon { width: 48px; height: 48px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; margin-right: 15px; flex-shrink: 0; }
 .stat-info { display: flex; flex-direction: column; }
 .stat-label { font-size: 13px; color: #64748b; margin-bottom: 4px; }
-.stat-value { font-size: 20px; font-weight: bold; white-space: nowrap; }
+.stat-value { font-size: 18px; font-weight: bold; white-space: nowrap; }
 
 /* 各卡片專屬顏色 */
 .income-card .stat-icon { background: #ecfdf5; color: #10b981; }
 .expense-card .stat-icon { background: #fef2f2; color: #ef4444; }
 .pending-card .stat-icon { background: #fffbeb; color: #f59e0b; }
-.asset-card .stat-icon { background: #eff6ff; color: #3b82f6; }
+.fund-card .stat-icon { background: #eff6ff; color: #3b82f6; }
 
 .text-green { color: #10b981; }
 .text-red { color: #ef4444; }
@@ -316,7 +340,7 @@ onMounted(() => {
 .todo-item:last-child { border-bottom: none; }
 .todo-item span { flex: 1; color: #475569; }
 
-/* 🆕 對帳區樣式 */
+/* 對帳區樣式 */
 .reconcile-box { display: flex; flex-direction: column; gap: 10px; }
 .calc-row { display: flex; justify-content: space-between; font-size: 14px; color: #475569; }
 .calc-row.highlight { font-weight: bold; color: #1e293b; font-size: 15px; margin-top: 5px; }
@@ -326,7 +350,8 @@ onMounted(() => {
 
 /* 手機端優化 */
 @media (max-width: 768px) {
-  .stat-value { font-size: 16px; }
+  .asset-value { font-size: 24px; }
+  .stat-value { font-size: 15px; }
   .stat-icon { width: 36px; height: 36px; font-size: 18px; margin-right: 10px; }
   .input-row { flex-direction: column; align-items: stretch; }
   .input-row .el-input-number { width: 100% !important; margin-bottom: 10px; }
@@ -334,6 +359,6 @@ onMounted(() => {
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/DashboardView.vue
-V: 1793810100
+V: 1793811000
 W: ai-wa-fs-001
 ═══ -->
