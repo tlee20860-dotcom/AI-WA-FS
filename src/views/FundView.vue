@@ -67,7 +67,6 @@
             <span class="value text-blue">HK$ {{ getLatestValue(fund).toLocaleString() }}</span>
           </div>
           
-          <!-- 🆕 真實盈虧公式：(現值 + 已提款) - 成本 -->
           <div class="pnl-box" :class="getPnl(fund) >= 0 ? 'pnl-positive' : 'pnl-negative'">
             <span>真實盈虧</span>
             <strong>{{ getPnl(fund) >= 0 ? '+' : '' }} HK$ {{ getPnl(fund).toLocaleString() }}</strong>
@@ -77,16 +76,17 @@
             最新快照：{{ getLatestSnapshot(fund).year_month }} 
             ({{ getLatestSnapshot(fund).units }} 單位)
           </div>
-          
-          <!-- 🆕 提款與轉換按鈕 -->
-          <div class="card-actions">
-            <el-button type="warning" size="small" plain @click="openWithdrawDialog(fund)">記錄提款/轉出</el-button>
-          </div>
+        </div>
+
+        <!-- 🆕 操作按鈕區 -->
+        <div class="card-actions">
+          <el-button type="primary" link size="small" @click="openHistoryDialog(fund)">查看歷史快照</el-button>
+          <el-button type="warning" size="small" plain @click="openWithdrawDialog(fund)">記錄提款/轉出</el-button>
         </div>
       </el-card>
     </div>
 
-    <!-- 新增基金彈窗 (保持不變) -->
+    <!-- 新增基金彈窗 -->
     <el-dialog v-model="fundDialogVisible" title="新增基金" width="90%" max-width="450px">
       <el-form :model="fundForm" label-position="top">
         <el-form-item label="基金名稱" required>
@@ -120,7 +120,7 @@
       </template>
     </el-dialog>
 
-    <!-- 輸入快照彈窗 (保持不變) -->
+    <!-- 輸入快照彈窗 -->
     <el-dialog v-model="snapshotDialogVisible" title="輸入基金快照" width="90%" max-width="450px">
       <el-form :model="snapshotForm" label-position="top">
         <el-form-item label="選擇基金" required>
@@ -159,7 +159,7 @@
       </template>
     </el-dialog>
 
-    <!-- 🆕 記錄提款/轉出彈窗 -->
+    <!-- 記錄提款彈窗 -->
     <el-dialog v-model="withdrawDialogVisible" title="記錄提款/轉出" width="90%" max-width="400px">
       <el-form label-position="top">
         <div class="preview-box" style="margin-bottom: 15px; background: #fffbeb; color: #d97706;">
@@ -173,6 +173,29 @@
         <el-button @click="withdrawDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submitWithdraw">確認記錄</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 🆕 歷史快照彈窗 -->
+    <el-dialog v-model="historyDialogVisible" :title="`歷史快照 - ${currentFund?.name}`" width="90%" max-width="600px">
+      <div class="table-wrapper">
+        <el-table :data="currentFundSnaps" style="width: 100%; min-width: 500px;" stripe>
+          <el-table-column prop="year_month" label="月份" width="100" />
+          <el-table-column prop="units" label="單位數" width="100" align="right" />
+          <el-table-column prop="nav" label="價格 (USD)" width="100" align="right" />
+          <el-table-column prop="exchange_rate" label="匯率" width="80" align="right" />
+          <el-table-column prop="total_value_hkd" label="總值 (HKD)" align="right">
+            <template #default="scope">
+              <span class="font-bold text-blue">HK$ {{ Number(scope.row.total_value_hkd).toLocaleString() }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" align="center">
+            <template #default="scope">
+              <el-button type="danger" link size="small" @click="deleteSnapshot(scope.row.id)">刪除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <el-empty v-if="currentFundSnaps.length === 0" description="尚無快照紀錄" :image-size="60" />
     </el-dialog>
   </div>
 </template>
@@ -193,15 +216,19 @@ const submitting = ref(false)
 const fundDialogVisible = ref(false)
 const snapshotDialogVisible = ref(false)
 const withdrawDialogVisible = ref(false)
+const historyDialogVisible = ref(false) // 🆕
 
 // 表單狀態
 const isLinkedToPolicy = ref(false)
 const fundForm = ref({ name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 })
 const snapshotForm = ref({ fund_id: '', year_month: new Date().toISOString().slice(0, 7), units: 0, nav: 0, exchange_rate: 7.8 })
 
-// 🆕 提款狀態
+// 提款狀態
 const currentFund = ref(null)
 const withdrawAmount = ref(0)
+
+// 🆕 歷史快照狀態
+const currentFundSnaps = ref([])
 
 const fundPolicies = computed(() => policies.value.filter(p => p.type === 'fund_insurance'))
 
@@ -210,10 +237,8 @@ const getPolicyName = (policyId) => {
   return p ? p.name : '未知保單'
 }
 
-// 🆕 取得基金成本
 const getFundCost = (fund) => {
   if (!fund.policy_id) return Number(fund.manual_cost) || 0
-  
   const policy = policies.value.find(p => p.id === fund.policy_id)
   if (!policy) return Number(fund.manual_cost) || 0
 
@@ -227,7 +252,6 @@ const getFundCost = (fund) => {
   return Math.round(fundCost)
 }
 
-// 🆕 優化真實盈虧公式：(現值 + 已提款) - 投入成本
 const getPnl = (fund) => {
   const currentVal = getLatestValue(fund)
   const withdrawn = Number(fund.withdrawn_amount) || 0
@@ -268,14 +292,37 @@ const fetchData = async () => {
   loading.value = false
 }
 
-// 🆕 打開提款彈窗
+// 🆕 打開歷史快照彈窗
+const openHistoryDialog = (fund) => {
+  currentFund.value = fund
+  // 篩選該基金的所有快照，並按時間降序排列
+  currentFundSnaps.value = snapshots.value
+    .filter(s => s.fund_id === fund.id)
+    .sort((a, b) => b.year_month.localeCompare(a.year_month))
+  historyDialogVisible.value = true
+}
+
+// 🆕 刪除快照
+const deleteSnapshot = async (id) => {
+  try {
+    await ElMessageBox.confirm('確定要刪除這筆快照嗎？這將會影響該月的盈虧計算。', '警告', { type: 'warning' })
+    const { error } = await supabase.from('fund_snapshots').delete().eq('id', id)
+    if (error) throw error
+    ElMessage.success('已刪除')
+    fetchData() // 重新抓取
+    // 重新整理彈窗內的列表
+    currentFundSnaps.value = currentFundSnaps.value.filter(s => s.id !== id)
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error('刪除失敗')
+  }
+}
+
 const openWithdrawDialog = (fund) => {
   currentFund.value = fund
   withdrawAmount.value = 0
   withdrawDialogVisible.value = true
 }
 
-// 🆕 提交提款
 const submitWithdraw = async () => {
   if (withdrawAmount.value <= 0) return ElMessage.warning('請輸入大於 0 的金額')
   submitting.value = true
@@ -287,9 +334,8 @@ const submitWithdraw = async () => {
     .eq('id', currentFund.value.id)
 
   submitting.value = false
-  if (error) {
-    ElMessage.error('記錄失敗：' + error.message)
-  } else {
+  if (error) ElMessage.error('記錄失敗：' + error.message)
+  else {
     ElMessage.success('✅ 已記錄提款')
     withdrawDialogVisible.value = false
     fetchData()
@@ -393,6 +439,7 @@ onMounted(() => fetchData())
 .text-green { color: #10b981; }
 .text-blue { color: #3b82f6; }
 .text-orange { color: #f59e0b; }
+.font-bold { font-weight: 600; }
 
 .fund-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .fund-card { border-radius: 12px; border: none; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
@@ -412,7 +459,10 @@ onMounted(() => fetchData())
 .latest-info { font-size: 12px; color: #94a3b8; margin-top: 5px; text-align: right; }
 .preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px 15px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
 
-.card-actions { display: flex; justify-content: flex-end; margin-top: 10px; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+/* 🆕 按鈕區排版 */
+.card-actions { display: flex; justify-content: space-between; margin-top: 10px; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+
+.table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 @media (max-width: 768px) {
   .header-actions { width: 100%; justify-content: flex-end; margin-top: 10px; }
@@ -422,6 +472,6 @@ onMounted(() => fetchData())
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/FundView.vue
-V: 1793810400
+V: 1793811100
 W: ai-wa-fs-001
 ═══ -->
