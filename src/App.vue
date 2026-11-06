@@ -28,7 +28,7 @@
       >
         <el-menu-item index="/">
           <el-icon><HomeFilled /></el-icon>
-          <template #title>工作台</template>
+          <template #title>總覽儀表板</template>
         </el-menu-item>
         <el-menu-item index="/cashflow">
           <el-icon><Money /></el-icon>
@@ -183,6 +183,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793810800
-W: ai-wa-fs-001
+V: 1793970500
+W: ai-wa-fs-002
 ═══ -->
