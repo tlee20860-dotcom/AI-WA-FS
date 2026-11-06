@@ -42,6 +42,11 @@
           <el-icon><TrendCharts /></el-icon>
           <template #title>基金投資</template>
         </el-menu-item>
+        <!-- 🆕 新增年度報表 -->
+        <el-menu-item index="/annual-report">
+          <el-icon><Document /></el-icon>
+          <template #title>年度報表</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -65,16 +70,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '@/config/supabase'
-import { HomeFilled, Money, Umbrella, Menu, TrendCharts } from '@element-plus/icons-vue'
+// 🆕 引入 Document 圖示
+import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document } from '@element-plus/icons-vue'
 
-const isCollapse = ref(false) // 控制桌面端折疊
-const isMobile = ref(false)   // 是否為手機端
-const isMobileOpen = ref(false) // 控制手機端側邊欄是否滑出
+const isCollapse = ref(false)
+const isMobile = ref(false)
+const isMobileOpen = ref(false)
 
 const checkScreenSize = () => {
   isMobile.value = window.innerWidth < 768
   if (!isMobile.value) {
-    isMobileOpen.value = false // 切換回電腦版時，關閉手機端狀態
+    isMobileOpen.value = false
   }
 }
 
@@ -88,7 +94,7 @@ const toggleMenu = () => {
 
 const onMenuSelect = () => {
   if (isMobile.value) {
-    isMobileOpen.value = false // 手機端點擊選單後自動收起
+    isMobileOpen.value = false
   }
 }
 
@@ -170,6 +176,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793808200
+V: 1793808700
 W: ai-wa-fs-001
 ═══ -->
