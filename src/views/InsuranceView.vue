@@ -18,9 +18,21 @@
             <h3>{{ p.name }}</h3>
             <span class="company">{{ p.company || '未填寫公司' }}</span>
           </div>
-          <el-tag :type="p.type === 'fund_insurance' ? 'warning' : 'primary'" size="small">
-            {{ p.type === 'fund_insurance' ? '基金保險' : '普通保險' }}
-          </el-tag>
+          <div class="header-right">
+            <el-tag :type="p.type === 'fund_insurance' ? 'warning' : 'primary'" size="small" style="margin-right: 8px;">
+              {{ p.type === 'fund_insurance' ? '基金保險' : '普通保險' }}
+            </el-tag>
+            <!-- 🆕 編輯與刪除按鈕 -->
+            <el-dropdown trigger="click" @command="(cmd) => handleCommand(cmd, p)">
+              <el-button text size="small"><el-icon><MoreFilled /></el-icon></el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="edit">編輯保單</el-dropdown-item>
+                  <el-dropdown-item command="delete" style="color: #ef4444;">刪除保單</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
         </div>
 
         <div class="card-body">
@@ -33,7 +45,6 @@
             <span class="value">{{ p.payment_freq }} (HK$ {{ p.premium_amount.toLocaleString() }})</span>
           </div>
           
-          <!-- 🆕 自動計算進度 -->
           <div class="progress-area">
             <div class="info-row" style="margin-bottom: 4px;">
               <span class="label">供款進度</span>
@@ -43,7 +54,6 @@
           </div>
         </div>
 
-        <!-- 🆕 本月狀態切換 -->
         <div class="card-footer">
           <div class="status-info">
             <span>本月狀態：</span>
@@ -62,8 +72,8 @@
       </el-card>
     </div>
 
-    <!-- 新增保單彈窗 (與之前相同) -->
-    <el-dialog v-model="dialogVisible" title="新增保單" width="90%" max-width="500px" :close-on-click-modal="false">
+    <!-- 新增/編輯保單彈窗 -->
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '編輯保單' : '新增保單'" width="90%" max-width="500px" :close-on-click-modal="false">
       <el-form :model="form" label-position="top">
         <el-form-item label="保單名稱" required>
           <el-input v-model="form.name" placeholder="例如：宏利儲蓄保險" />
@@ -122,22 +132,21 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
-import { ElMessage } from 'element-plus'
-import { Loading, InfoFilled } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Loading, InfoFilled, MoreFilled } from '@element-plus/icons-vue'
 
 const policies = ref([])
-const payments = ref([]) // 🆕 儲存所有繳費紀錄
+const payments = ref([]) 
 const loading = ref(true)
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const isEdit = ref(false) // 🆕 判斷是否為編輯模式
 
-// 取得當前年月字串 (例如 "2026-11")
 const currentYearMonth = computed(() => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 })
 
-// 🆕 計算保單進度
 const getProgress = (p) => {
   const start = new Date(p.start_date)
   const now = new Date()
@@ -151,7 +160,6 @@ const getProgress = (p) => {
   }
 }
 
-// 🆕 取得該保單「本月」的狀態
 const getCurrentPaymentStatus = (policyId) => {
   const record = payments.value.find(
     pay => pay.policy_id === policyId && pay.year_month === currentYearMonth.value
@@ -159,23 +167,19 @@ const getCurrentPaymentStatus = (policyId) => {
   return record ? record.status : '未轉'
 }
 
-// 🆕 切換狀態（寫入或更新資料庫）
 const togglePayment = async (policyId) => {
   const currentStatus = getCurrentPaymentStatus(policyId)
   const newStatus = currentStatus === '已轉' ? '未轉' : '已轉'
   
-  // 找找看有沒有這個月的紀錄
   const existing = payments.value.find(
     pay => pay.policy_id === policyId && pay.year_month === currentYearMonth.value
   )
 
   let error
   if (existing) {
-    // 更新
     const res = await supabase.from('insurance_payments').update({ status: newStatus }).eq('id', existing.id)
     error = res.error
   } else {
-    // 新增
     const res = await supabase.from('insurance_payments').insert([{
       policy_id: policyId,
       year_month: currentYearMonth.value,
@@ -188,15 +192,13 @@ const togglePayment = async (policyId) => {
     ElMessage.error('狀態更新失敗：' + error.message)
   } else {
     ElMessage.success(`已標記為 ${newStatus}`)
-    fetchData() // 重新抓取資料刷新畫面
+    fetchData() 
   }
 }
 
-// 表單相關
-const form = ref({ name: '', company: '', start_date: new Date().toISOString().split('T')[0], total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' })
+const form = ref({ id: null, name: '', company: '', start_date: '', total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' })
 const computedMonthlyAverage = computed(() => form.value.payment_freq === '年繳' ? Math.round((form.value.premium_amount || 0) / 12) : (form.value.premium_amount || 0))
 
-// 獲取資料
 const fetchData = async () => {
   loading.value = true
   const [policiesRes, paymentsRes] = await Promise.all([
@@ -214,24 +216,70 @@ const fetchData = async () => {
 }
 
 const openAddDialog = () => {
-  form.value = { name: '', company: '', start_date: new Date().toISOString().split('T')[0], total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' }
+  isEdit.value = false
+  form.value = { id: null, name: '', company: '', start_date: new Date().toISOString().split('T')[0], total_years: 10, payment_freq: '月繳', premium_amount: 0, type: 'normal' }
   dialogVisible.value = true
+}
+
+// 🆕 處理下拉選單的指令 (編輯/刪除)
+const handleCommand = (command, policy) => {
+  if (command === 'edit') {
+    isEdit.value = true
+    form.value = { ...policy }
+    dialogVisible.value = true
+  } else if (command === 'delete') {
+    deletePolicy(policy.id, policy.name)
+  }
+}
+
+// 🆕 刪除保單
+const deletePolicy = async (id, name) => {
+  try {
+    await ElMessageBox.confirm(`刪除保單「${name}」將會一併刪除其所有繳費紀錄，確定嗎？`, '警告', { type: 'warning', confirmButtonText: '確定刪除', cancelButtonText: '取消' })
+    const { error } = await supabase.from('insurance_policies').delete().eq('id', id)
+    if (error) throw error
+    ElMessage.success('保單已刪除')
+    fetchData()
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error('刪除失敗：' + (err.message || '未知錯誤'))
+  }
 }
 
 const submitForm = async () => {
   if (!form.value.name || !form.value.start_date || form.value.premium_amount <= 0) return ElMessage.warning('請填寫完整資訊')
   submitting.value = true
-  const { error } = await supabase.from('insurance_policies').insert([{
-    family_id: '00000000-0000-0000-0000-000000000001',
-    name: form.value.name, company: form.value.company, start_date: form.value.start_date,
-    total_years: form.value.total_years, payment_freq: form.value.payment_freq,
-    premium_amount: form.value.premium_amount, monthly_average: computedMonthlyAverage.value,
+  
+  const payload = {
+    name: form.value.name, 
+    company: form.value.company, 
+    start_date: form.value.start_date,
+    total_years: form.value.total_years, 
+    payment_freq: form.value.payment_freq,
+    premium_amount: form.value.premium_amount, 
+    monthly_average: computedMonthlyAverage.value,
     type: form.value.type
-  }])
+  }
+
+  let error
+  if (isEdit.value) {
+    // 更新
+    const res = await supabase.from('insurance_policies').update(payload).eq('id', form.value.id)
+    error = res.error
+  } else {
+    // 新增
+    const res = await supabase.from('insurance_policies').insert([{
+      family_id: '00000000-0000-0000-0000-000000000001',
+      ...payload
+    }])
+    error = res.error
+  }
+
   submitting.value = false
-  if (error) ElMessage.error('儲存失敗：' + error.message)
-  else {
-    ElMessage.success('✅ 保單已新增')
+  
+  if (error) {
+    ElMessage.error('儲存失敗：' + error.message)
+  } else {
+    ElMessage.success(isEdit.value ? '✅ 保單已更新' : '✅ 保單已新增')
     dialogVisible.value = false
     fetchData()
   }
@@ -241,12 +289,14 @@ onMounted(() => fetchData())
 </script>
 
 <style scoped>
+/* 樣式保持不變，僅增加 header-right 以對齊按鈕 */
 .insurance-container { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; color: #1e293b; }
 .policy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .policy-card { border-radius: 12px; border: none; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
+.header-right { display: flex; align-items: center; }
 .title-area h3 { margin: 0 0 4px 0; color: #0f172a; font-size: 16px; }
 .company { font-size: 12px; color: #64748b; }
 .card-body { display: flex; flex-direction: column; gap: 8px; }
@@ -261,6 +311,6 @@ onMounted(() => fetchData())
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/InsuranceView.vue
-V: 1793806900
+V: 1793809400
 W: ai-wa-fs-001
 ═══ -->
