@@ -31,6 +31,10 @@
           <el-icon><Umbrella /></el-icon>
           <template #title>保險供款</template>
         </el-menu-item>
+        <el-menu-item index="/fund">
+          <el-icon><TrendCharts /></el-icon>
+          <template #title>基金投資</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -54,7 +58,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '@/config/supabase'
-import { HomeFilled, Money, Umbrella, Menu } from '@element-plus/icons-vue'
+import { HomeFilled, Money, Umbrella, Menu, TrendCharts } from '@element-plus/icons-vue'
 
 const isCollapse = ref(false)
 const isMobile = ref(false)
@@ -135,6 +139,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793807200
+V: 1793807600
 W: ai-wa-fs-001
-═══ -->
+═══ */
