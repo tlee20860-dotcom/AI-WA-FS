@@ -15,16 +15,21 @@
       class="transition-all"
     >
       <div class="logo">
+        <div class="logo-icon">
+          <el-icon><Money /></el-icon>
+        </div>
         <h2 v-if="!isCollapse || isMobile">家庭入帳 V3</h2>
       </div>
+      
       <el-menu
         :default-active="$route.path"
         router
-        background-color="#1e293b"
-        text-color="#94a3b8"
-        active-text-color="#38bdf8"
+        background-color="transparent"
+        text-color="#64748B"
+        active-text-color="#6366F1"
         :collapse="isCollapse && !isMobile"
         @select="onMenuSelect"
+        class="custom-menu"
       >
         <el-menu-item index="/">
           <el-icon><HomeFilled /></el-icon>
@@ -36,7 +41,7 @@
         </el-menu-item>
         <el-menu-item index="/settlement">
           <el-icon><Tickets /></el-icon>
-          <template #title>待轉帳表</template>
+          <template #title>待辦中心</template>
         </el-menu-item>
         <el-menu-item index="/insurance">
           <el-icon><Umbrella /></el-icon>
@@ -64,7 +69,7 @@
           <el-icon :size="20"><Menu /></el-icon>
         </el-button>
         <div class="header-title">歡迎回來</div>
-        <el-button type="danger" plain size="small" @click="handleLogout">登出</el-button>
+        <el-button type="danger" plain size="small" class="logout-btn" @click="handleLogout">登出</el-button>
       </el-header>
       
       <el-main class="main-content">
@@ -77,7 +82,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '@/config/supabase'
-// 🆕 引入 Tickets 圖示
 import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document, Setting, Tickets } from '@element-plus/icons-vue'
 
 const isCollapse = ref(false)
@@ -121,35 +125,87 @@ onUnmounted(() => {
 </script>
 
 <style>
-body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; }
+body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; background-color: #F4F7FB; }
 
 /* 佈局基礎 */
 .app-layout { display: flex; height: 100vh; overflow: hidden; width: 100vw; }
 .main-wrapper { flex: 1; width: 0; overflow: hidden; display: flex; flex-direction: column; }
 
-/* 側邊欄基礎樣式 */
+/* 側邊欄基礎樣式 - 白底 */
 .sidebar { 
-  background-color: #1e293b; 
-  color: white; 
+  background-color: #ffffff; 
+  border-right: 1px solid rgba(0,0,0,0.04);
   z-index: 1000;
-  width: 220px;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
 }
 .sidebar.is-collapsed {
   width: 64px;
 }
-.logo { height: 60px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #334155; overflow: hidden; }
-.logo h2 { margin: 0; font-size: 18px; color: #f8fafc; white-space: nowrap; }
-.sidebar .el-menu { border-right: none; }
 
-/* 頂部導覽列 */
-.header { background-color: white; display: flex; align-items: center; border-bottom: 1px solid #e2e8f0; padding: 0 15px; height: 60px; flex-shrink: 0; }
-.header-title { font-weight: bold; color: #334155; margin-left: 10px; flex: 1; }
-.menu-toggle { margin-right: 10px; color: #64748b; padding: 8px; }
+/* Logo 區域 */
+.logo { 
+  height: 64px; 
+  display: flex; 
+  align-items: center; 
+  padding: 0 20px; 
+  gap: 12px;
+  overflow: hidden; 
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #6366F1, #06B6D4);
+  border-radius: 8px;
+  display: flex; justify-content: center; align-items: center;
+  color: white; flex-shrink: 0;
+}
+.logo h2 { margin: 0; font-size: 18px; color: #1e293b; white-space: nowrap; font-weight: 700; }
+
+/* 選單樣式覆寫 */
+.custom-menu { border-right: none; padding: 10px; }
+.el-menu-item {
+  border-radius: 10px;
+  margin-bottom: 4px;
+  height: 44px;
+  line-height: 44px;
+  font-weight: 500;
+}
+.el-menu-item:hover {
+  background-color: #F8FAFC !important;
+}
+.el-menu-item.is-active {
+  background-color: #EEF2FF !important;
+  font-weight: 700;
+}
+.el-menu-item.is-active .el-icon {
+  color: #6366F1;
+}
+
+/* 頂部導覽列 - 毛玻璃效果 */
+.header { 
+  background-color: rgba(255, 255, 255, 0.8); 
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex; 
+  align-items: center; 
+  border-bottom: 1px solid rgba(0,0,0,0.04); 
+  padding: 0 20px; 
+  height: 64px; 
+  flex-shrink: 0; 
+  z-index: 999;
+}
+.header-title { font-weight: 700; color: #1e293b; margin-left: 10px; flex: 1; font-size: 16px; }
+.menu-toggle { margin-right: 10px; color: #64748b; padding: 8px; border-radius: 8px; }
+.menu-toggle:hover { background-color: #F1F5F9; }
+
+.logout-btn { border-radius: 8px; border: none; background-color: #FEF2F2; color: #EF4444; }
+.logout-btn:hover { background-color: #FEE2E2; }
 
 /* 內容區 */
 .main-content { 
-  background-color: #f1f5f9; 
-  padding: 15px; 
+  background-color: #F4F7FB; 
+  padding: 24px; 
   overflow-y: auto; 
   overflow-x: hidden; 
   flex: 1; 
@@ -165,24 +221,27 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
     top: 0;
     left: 0;
     height: 100vh;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.1);
   }
   .sidebar.is-mobile-hidden {
     transform: translateX(-100%);
-    width: 220px;
+    width: 240px;
   }
   .sidebar-mask {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
     z-index: 999;
   }
   .main-content {
-    padding: 10px;
+    padding: 16px;
   }
 }
 </style>
+
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793970500
+V: 1793971100
 W: ai-wa-fs-002
 ═══ -->
