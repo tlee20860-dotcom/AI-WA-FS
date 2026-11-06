@@ -1,12 +1,36 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
 export default defineConfig({
   base: '/',
   plugins: [
-    vue()
-    // 暫時移除 VitePWA 外掛，避免開發階段網路請求被快取干擾
+    vue(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      manifest: {
+        name: '家庭入帳 V3',
+        short_name: '入帳 V3',
+        description: '家庭財務與保險基金管理系統',
+        theme_color: '#1e293b',
+        background_color: '#f1f5f9',
+        display: 'standalone',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          }
+        ]
+      }
+    })
   ],
   resolve: {
     alias: {
@@ -21,6 +45,6 @@ export default defineConfig({
 
 /* ═══ EOF ═══
 F: AI-WA-FS/vite.config.js
-V: 1793078600
+V: 1793810200
 W: ai-wa-fs-001
 ═══ */
