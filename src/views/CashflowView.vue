@@ -158,7 +158,6 @@
           <el-input-number v-model="form.amount" :min="1" style="width: 100%" />
         </el-form-item>
         
-        <!-- 🆕 100% 依賴資料庫的成員選單 -->
         <el-form-item label="對象" required>
           <el-select v-model="form.member_name" style="width: 100%">
             <el-option v-for="m in members" :key="m.id" :label="m.name" :value="m.name" />
@@ -166,13 +165,9 @@
         </el-form-item>
         
         <el-form-item label="類別" v-if="activeTab === 'expense'">
+          <!-- 🆕 動態分類選單，保留 allow-create 允許快速新增 -->
           <el-select v-model="form.category_name" style="width: 100%" allow-create filterable default-first-option>
-            <el-option label="日常飲食" value="日常飲食" />
-            <el-option label="交通" value="交通" />
-            <el-option label="租金" value="租金" />
-            <el-option label="水電煤" value="水電煤" />
-            <el-option label="保險" value="保險" />
-            <el-option label="雜費" value="雜費" />
+            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.name" />
           </el-select>
         </el-form-item>
         
@@ -203,7 +198,8 @@ const activeTab = ref('expense')
 const viewMode = ref('table')
 const expenses = ref([])
 const incomes = ref([])
-const members = ref([]) // 儲存成員列表
+const members = ref([])
+const categories = ref([]) // 🆕 儲存分類列表
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -214,12 +210,16 @@ const totalIncome = computed(() => incomes.value.reduce((sum, i) => sum + Number
 const pendingExpenses = computed(() => expenses.value.filter(e => e.status !== '已處理'))
 const doneExpenses = computed(() => expenses.value.filter(e => e.status === '已處理'))
 
-const form = ref({ name: '', amount: 1, member_name: '', category_name: '日常飲食', status: '未處理' })
+const form = ref({ name: '', amount: 1, member_name: '', category_name: '', status: '未處理' })
 
-// 獲取成員列表
-const fetchMembers = async () => {
-  const { data } = await supabase.from('members').select('*').order('created_at', { ascending: true })
-  if (data) members.value = data
+// 獲取成員與分類列表
+const fetchDependencies = async () => {
+  const [mRes, cRes] = await Promise.all([
+    supabase.from('members').select('*').order('created_at', { ascending: true }),
+    supabase.from('expense_categories').select('*').order('created_at', { ascending: true })
+  ])
+  if (mRes.data) members.value = mRes.data
+  if (cRes.data) categories.value = cRes.data
 }
 
 const fetchData = async () => {
@@ -247,9 +247,11 @@ const toggleExpenseStatus = async (item) => {
 }
 
 const openAddDialog = () => {
-  // 預設選取資料庫中的第一個成員
+  // 預設選取第一個成員與分類
   const defaultMember = members.value.length > 0 ? members.value[0].name : ''
-  form.value = { name: '', amount: 1, member_name: defaultMember, category_name: '日常飲食', status: '未處理' }
+  const defaultCategory = categories.value.length > 0 ? categories.value[0].name : ''
+  
+  form.value = { name: '', amount: 1, member_name: defaultMember, category_name: defaultCategory, status: '未處理' }
   dialogVisible.value = true
 }
 
@@ -308,12 +310,11 @@ const deleteRecord = async (table, id) => {
 
 onMounted(() => {
   fetchData()
-  fetchMembers()
+  fetchDependencies()
 })
 </script>
 
 <style scoped>
-/* 樣式保持不變 */
 .cashflow-container { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
 .header-left { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
@@ -390,6 +391,6 @@ onMounted(() => {
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793809300
+V: 1793809600
 W: ai-wa-fs-001
 ═══ -->
