@@ -45,7 +45,7 @@
         </div>
       </el-tab-pane>
 
-      <!-- 🆕 固定支出模板 -->
+      <!-- 固定支出模板 -->
       <el-tab-pane label="固定支出" name="fixed">
         <div class="tab-content">
           <div class="action-bar">
@@ -68,6 +68,39 @@
               </template>
             </el-table-column>
           </el-table>
+        </div>
+      </el-tab-pane>
+
+      <!-- 🆕 資料管理（危險區域） -->
+      <el-tab-pane label="資料管理" name="data">
+        <div class="tab-content danger-zone">
+          <h3 class="danger-title">⚠️ 危險區域 (Danger Zone)</h3>
+          <p class="danger-desc">以下操作將會永久刪除資料庫中的紀錄，且無法復原。請謹慎操作。</p>
+
+          <div class="danger-card">
+            <div class="danger-info">
+              <h4>清空所有記帳紀錄</h4>
+              <p>刪除所有的收支流水、保險繳費狀態、基金快照與銀行對帳紀錄。保留成員與保單主檔。</p>
+            </div>
+            <el-button type="danger" plain @click="clearAllRecords" :loading="clearing">清空紀錄</el-button>
+          </div>
+
+          <div class="danger-card">
+            <div class="danger-info">
+              <h3>重置整個系統</h3>
+              <p>刪除所有資料，包含成員、保單、基金、分類與所有流水。讓系統回到全新狀態。</p>
+            </div>
+            <el-button type="danger" @click="resetSystem" :loading="clearing">徹底重置</el-button>
+          </div>
+
+          <div class="info-card">
+            <h4>資料狀態</h4>
+            <ul class="data-stats">
+              <li>家庭成員：{{ members.length }} 人</li>
+              <li>支出分類：{{ categories.length }} 個</li>
+              <li>固定支出模板：{{ fixedExpenses.length }} 個</li>
+            </ul>
+          </div>
         </div>
       </el-tab-pane>
 
@@ -116,12 +149,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const activeTab = ref('members')
 const members = ref([])
 const categories = ref([])
-const fixedExpenses = ref([]) // 🆕 固定支出列表
+const fixedExpenses = ref([])
 const loading = ref(false)
 const submitting = ref(false)
+const clearing = ref(false)
 const dialogVisible = ref(false)
 
-const formType = ref('member') // 'member', 'category', 'fixed'
+const formType = ref('member')
 const form = ref({ id: null, name: '', role: '', amount: 0, payer_name: '', category_name: '' })
 const isEdit = ref(false)
 
@@ -223,6 +257,58 @@ const deleteItem = async (table, id) => {
   }
 }
 
+// 🆕 清空記帳紀錄
+const clearAllRecords = async () => {
+  try {
+    await ElMessageBox.confirm('這將清空所有收支、保險狀態與基金快照，但會保留你的成員與主檔設定。確定要繼續嗎？', '高風險操作', { type: 'error', confirmButtonText: '確定清空' })
+    clearing.value = true
+    const familyId = '00000000-0000-0000-0000-000000000001'
+
+    await Promise.all([
+      supabase.from('expenses').delete().eq('family_id', familyId),
+      supabase.from('incomes').delete().eq('family_id', familyId),
+      supabase.from('insurance_payments').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('fund_snapshots').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('monthly_balances').delete().eq('family_id', familyId)
+    ])
+
+    ElMessage.success('✅ 記帳紀錄已全部清空')
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error('清空失敗')
+  } finally {
+    clearing.value = false
+  }
+}
+
+// 🆕 徹底重置系統
+const resetSystem = async () => {
+  try {
+    await ElMessageBox.confirm('【警告】這將刪除系統內「所有」的資料，包含成員、保單、基金與所有收支紀錄。系統將回到全新狀態。你確定嗎？', '徹底重置', { type: 'error', confirmButtonText: '我確定要重置' })
+    clearing.value = true
+    const familyId = '00000000-0000-0000-0000-000000000001'
+
+    await Promise.all([
+      supabase.from('expenses').delete().eq('family_id', familyId),
+      supabase.from('incomes').delete().eq('family_id', familyId),
+      supabase.from('insurance_payments').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('fund_snapshots').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('monthly_balances').delete().eq('family_id', familyId),
+      supabase.from('fixed_expenses').delete().eq('family_id', familyId),
+      supabase.from('funds').delete().eq('family_id', familyId),
+      supabase.from('insurance_policies').delete().eq('family_id', familyId),
+      supabase.from('expense_categories').delete().eq('family_id', familyId),
+      supabase.from('members').delete().eq('family_id', familyId)
+    ])
+
+    ElMessage.success('✅ 系統已徹底重置')
+    fetchData()
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error('重置失敗')
+  } finally {
+    clearing.value = false
+  }
+}
+
 onMounted(() => {
   fetchData()
 })
@@ -240,12 +326,26 @@ onMounted(() => {
 .text-red { color: #ef4444; }
 .font-bold { font-weight: 600; }
 
+/* 🆕 危險區域樣式 */
+.danger-zone { max-width: 800px; }
+.danger-title { color: #ef4444; margin-bottom: 5px; }
+.danger-desc { color: #64748b; font-size: 14px; margin-bottom: 20px; }
+
+.danger-card { border: 1px solid #fca5a5; background: #fef2f2; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.danger-info h4 { margin: 0 0 5px 0; color: #b91c1c; font-size: 16px; }
+.danger-info p { margin: 0; color: #991b1b; font-size: 13px; }
+
+.info-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 20px; border-radius: 8px; }
+.info-card h4 { margin: 0 0 10px 0; color: #1e293b; font-size: 16px; }
+.data-stats { margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 1.8; }
+
 @media (max-width: 768px) {
   .action-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .danger-card { flex-direction: column; align-items: flex-start; }
 }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettingsView.vue
-V: 1793809800
+V: 1793811400
 W: ai-wa-fs-001
 ═══ -->
