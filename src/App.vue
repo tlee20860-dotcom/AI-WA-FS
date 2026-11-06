@@ -2,13 +2,20 @@
   <router-view v-if="$route.path === '/login'" />
   
   <el-container v-else class="app-layout">
-    <!-- 🚨 手機端遮罩：側邊欄打開時點擊遮罩可關閉 -->
-    <div v-if="isMobile && !isCollapse" class="sidebar-mask" @click="isCollapse = true"></div>
+    <!-- 🚨 手機端遮罩 -->
+    <div v-if="isMobile && isMobileOpen" class="sidebar-mask" @click="isMobileOpen = false"></div>
 
     <!-- 側邊選單 -->
-    <el-aside :width="isCollapse ? '64px' : '220px'" class="sidebar" :class="{ 'mobile-sidebar': isMobile }">
+    <el-aside 
+      :class="{ 
+        'sidebar': true, 
+        'is-collapsed': isCollapse && !isMobile,
+        'is-mobile-hidden': isMobile && !isMobileOpen 
+      }" 
+      class="transition-all"
+    >
       <div class="logo">
-        <h2 v-if="!isCollapse">家庭入帳 V3</h2>
+        <h2 v-if="!isCollapse || isMobile">家庭入帳 V3</h2>
       </div>
       <el-menu
         :default-active="$route.path"
@@ -16,7 +23,7 @@
         background-color="#1e293b"
         text-color="#94a3b8"
         active-text-color="#38bdf8"
-        :collapse="isCollapse"
+        :collapse="isCollapse && !isMobile"
         @select="onMenuSelect"
       >
         <el-menu-item index="/">
@@ -41,7 +48,7 @@
     <!-- 主內容區 -->
     <el-container class="main-wrapper">
       <el-header class="header">
-        <el-button class="menu-toggle" text @click="isCollapse = !isCollapse">
+        <el-button class="menu-toggle" text @click="toggleMenu">
           <el-icon :size="20"><Menu /></el-icon>
         </el-button>
         <div class="header-title">歡迎回來</div>
@@ -60,21 +67,28 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { HomeFilled, Money, Umbrella, Menu, TrendCharts } from '@element-plus/icons-vue'
 
-const isCollapse = ref(false)
-const isMobile = ref(false)
+const isCollapse = ref(false) // 控制桌面端折疊
+const isMobile = ref(false)   // 是否為手機端
+const isMobileOpen = ref(false) // 控制手機端側邊欄是否滑出
 
 const checkScreenSize = () => {
   isMobile.value = window.innerWidth < 768
+  if (!isMobile.value) {
+    isMobileOpen.value = false // 切換回電腦版時，關閉手機端狀態
+  }
+}
+
+const toggleMenu = () => {
   if (isMobile.value) {
-    isCollapse.value = true
+    isMobileOpen.value = !isMobileOpen.value
   } else {
-    isCollapse.value = false
+    isCollapse.value = !isCollapse.value
   }
 }
 
 const onMenuSelect = () => {
   if (isMobile.value) {
-    isCollapse.value = true
+    isMobileOpen.value = false // 手機端點擊選單後自動收起
   }
 }
 
@@ -96,46 +110,52 @@ onUnmounted(() => {
 <style>
 body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; }
 
-/* 電腦版佈局 */
-.app-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
-.sidebar { background-color: #1e293b; color: white; transition: width 0.3s; z-index: 1000; }
+/* 佈局基礎 */
+.app-layout { display: flex; height: 100vh; overflow: hidden; width: 100vw; }
+.main-wrapper { flex: 1; width: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+/* 側邊欄基礎樣式 */
+.sidebar { 
+  background-color: #1e293b; 
+  color: white; 
+  z-index: 1000;
+  width: 220px;
+}
+.sidebar.is-collapsed {
+  width: 64px;
+}
 .logo { height: 60px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #334155; overflow: hidden; }
 .logo h2 { margin: 0; font-size: 18px; color: #f8fafc; white-space: nowrap; }
 .sidebar .el-menu { border-right: none; }
 
-.main-wrapper { flex: 1; width: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* 頂部導覽列 */
 .header { background-color: white; display: flex; align-items: center; border-bottom: 1px solid #e2e8f0; padding: 0 15px; height: 60px; flex-shrink: 0; }
 .header-title { font-weight: bold; color: #334155; margin-left: 10px; flex: 1; }
-.main-content { background-color: #f1f5f9; padding: 15px; overflow-y: auto; flex: 1; }
 .menu-toggle { margin-right: 10px; color: #64748b; padding: 8px; }
 
-/* 🚨 手機端佈局：解除高度限制，恢復瀏覽器原生滑動 */
+/* 內容區 */
+.main-content { 
+  background-color: #f1f5f9; 
+  padding: 15px; 
+  overflow-y: auto; 
+  overflow-x: hidden; 
+  flex: 1; 
+}
+
+/* 過渡動畫 */
+.transition-all { transition: width 0.3s, transform 0.3s; }
+
+/* 🚨 手機端專用樣式 */
 @media (max-width: 768px) {
-  .app-layout { 
-    display: block; 
-    height: auto; 
-    min-height: 100vh; 
-    overflow: visible; 
-  }
-  .main-wrapper { 
-    display: block; 
-    width: 100%; 
-    height: auto; 
-  }
-  .main-content { 
-    padding: 10px; 
-    overflow-y: visible; 
-    height: auto; 
-    padding-bottom: 50px; /* 預留底部空間 */
-  }
-  
-  /* 手機端側邊欄浮動 */
-  .mobile-sidebar {
+  .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     height: 100vh;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.2);
+  }
+  .sidebar.is-mobile-hidden {
+    transform: translateX(-100%);
+    width: 220px;
   }
   .sidebar-mask {
     position: fixed;
@@ -143,15 +163,13 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
     background: rgba(0,0,0,0.5);
     z-index: 999;
   }
-  .header {
-    position: sticky;
-    top: 0;
-    z-index: 900;
+  .main-content {
+    padding: 10px;
   }
 }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793808100
+V: 1793808200
 W: ai-wa-fs-001
 ═══ -->
