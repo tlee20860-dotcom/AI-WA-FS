@@ -231,7 +231,7 @@ const exportExcel = async () => {
 
     const allItems = []
 
-    // 收集收入 (無對象分組，通常只有成員)
+    // 收集收入
     rawIncomes.value.forEach(i => {
       allItems.push({
         year_month: i.year_month,
@@ -264,7 +264,7 @@ const exportExcel = async () => {
         allItems.push({
           year_month: ip.year_month,
           type: '保險',
-          payer: '保險公司',
+          payer: p.holder_name || '家庭共用', // 🆕 改為讀取持有人
           name: `保險供款：${p.name}`,
           category: '保險',
           amount: Number(p.monthly_average),
@@ -416,6 +416,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/AnnualReportView.vue
-V: 1793971600
+V: 1793972300
 W: ai-wa-fs-002
 ═══ -->
