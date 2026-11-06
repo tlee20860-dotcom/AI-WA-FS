@@ -18,6 +18,9 @@
           <el-radio-button label="table">表格</el-radio-button>
           <el-radio-button label="kanban">看板</el-radio-button>
         </el-radio-group>
+        <el-button type="success" plain icon="Download" @click="exportExcel" :loading="exporting" :disabled="expenses.length === 0">
+          匯出明細
+        </el-button>
         <el-button type="primary" @click="openAddDialog">+ 新增紀錄</el-button>
       </div>
     </div>
@@ -191,7 +194,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MagicStick } from '@element-plus/icons-vue'
+import { MagicStick, Download } from '@element-plus/icons-vue'
+import ExcelJS from 'exceljs'
+import { saveAs } from 'file-saver'
 
 const d = new Date()
 const selectedMonth = ref(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
@@ -205,6 +210,7 @@ const categories = ref([])
 const loading = ref(false)
 const submitting = ref(false)
 const importing = ref(false)
+const exporting = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 
@@ -286,6 +292,114 @@ const importFixedExpenses = async () => {
     ElMessage.error('匯入失敗：' + err.message)
   } finally {
     importing.value = false
+  }
+}
+
+// 🆕 匯出 Excel 功能
+const exportExcel = async () => {
+  if (expenses.value.length === 0) return ElMessage.warning('本月沒有支出紀錄可匯出')
+  exporting.value = true
+
+  try {
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('收支明細')
+
+    // 設定欄位
+    worksheet.columns = [
+      { header: '對象', key: 'payer_name', width: 15 },
+      { header: '項目名稱', key: 'name', width: 30 },
+      { header: '類別', key: 'category_name', width: 20 },
+      { header: '金額', key: 'amount', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: '狀態', key: 'status', width: 15 }
+    ]
+
+    // 表頭樣式
+    const headerRow = worksheet.getRow(1)
+    headerRow.font = { bold: true }
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } }
+
+    // 按對象分組
+    const grouped = {}
+    expenses.value.forEach(item => {
+      const payer = item.payer_name || '未指定'
+      if (!grouped[payer]) grouped[payer] = []
+      grouped[payer].push(item)
+    })
+
+    // 寫入分組與小計
+    let currentRow = 2
+    for (const [payer, items] of Object.entries(grouped)) {
+      // 寫入明細
+      items.forEach(item => {
+        const row = worksheet.addRow({
+          payer_name: item.payer_name,
+          name: item.name,
+          category_name: item.category_name,
+          amount: Number(item.amount),
+          status: item.status
+        })
+        row.getCell('amount').alignment = { horizontal: 'right' }
+        currentRow++
+      })
+
+      // 寫入小計
+      const subtotal = items.reduce((sum, i) => sum + Number(i.amount), 0)
+      const subtotalRow = worksheet.addRow({
+        payer_name: '',
+        name: `${payer} 總支出`,
+        category_name: '',
+        amount: subtotal,
+        status: ''
+      })
+      
+      // 合併儲存格 (對象到類別)
+      worksheet.mergeCells(`A${currentRow}:C${currentRow}`)
+      subtotalRow.getCell(2).alignment = { horizontal: 'right' }
+      subtotalRow.getCell(4).alignment = { horizontal: 'right' }
+      subtotalRow.font = { bold: true }
+      subtotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }
+      
+      currentRow++
+    }
+
+    // 寫入總計
+    const totalRow = worksheet.addRow({
+      payer_name: '',
+      name: '本月總支出',
+      category_name: '',
+      amount: totalExpense.value,
+      status: ''
+    })
+    worksheet.mergeCells(`A${currentRow}:C${currentRow}`)
+    totalRow.getCell(2).alignment = { horizontal: 'right' }
+    totalRow.getCell(4).alignment = { horizontal: 'right' }
+    totalRow.font = { bold: true, color: { argb: 'FFEF4444' } } // 紅色字體
+    totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF0F0' } }
+
+    // 設定所有儲存格邊框
+    worksheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFDDDDDD' } },
+          left: { style: 'thin', color: { argb: 'FFDDDDDD' } },
+          bottom: { style: 'thin', color: { argb: 'FFDDDDDD' } },
+          right: { style: 'thin', color: { argb: 'FFDDDDDD' } }
+        }
+      })
+    })
+
+    // 生成 Buffer 並下載
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    saveAs(blob, `收支明細_${selectedMonth.value}.xlsx`)
+    
+    ElMessage.success('✅ Excel 已匯出')
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('匯出失敗：' + err.message)
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -493,8 +607,9 @@ onMounted(() => {
   .tool-bar { justify-content: center; }
 }
 </style>
+
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793811200
-W: ai-wa-fs-001
+V: 1793969100
+W: ai-wa-fs-002
 ═══ -->
