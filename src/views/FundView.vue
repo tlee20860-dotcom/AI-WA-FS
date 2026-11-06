@@ -141,7 +141,6 @@ const submitting = ref(false)
 const fundDialogVisible = ref(false)
 const snapshotDialogVisible = ref(false)
 
-// 表單狀態
 const fundForm = ref({ name: '', manual_cost: 0 })
 const snapshotForm = ref({
   fund_id: '',
@@ -151,30 +150,25 @@ const snapshotForm = ref({
   exchange_rate: 7.8
 })
 
-// 總計計算
 const totalCost = computed(() => funds.value.reduce((sum, f) => sum + Number(f.manual_cost), 0))
 const totalValue = computed(() => funds.value.reduce((sum, f) => sum + getLatestValue(f), 0))
 const totalPnl = computed(() => totalValue.value - totalCost.value)
 
-// 取得某基金的最新快照
 const getLatestSnapshot = (fund) => {
   const fSnaps = snapshots.value.filter(s => s.fund_id === fund.id)
   if (fSnaps.length === 0) return null
   return fSnaps.sort((a, b) => b.year_month.localeCompare(a.year_month))[0]
 }
 
-// 取得某基金最新現值
 const getLatestValue = (fund) => {
   const latest = getLatestSnapshot(fund)
   return latest ? Number(latest.total_value_hkd) : 0
 }
 
-// 取得某基金盈虧
 const getPnl = (fund) => {
   return getLatestValue(fund) - Number(fund.manual_cost)
 }
 
-// 預估快照總值
 const computedSnapshotValue = computed(() => {
   const v = (snapshotForm.value.units || 0) * (snapshotForm.value.nav || 0) * (snapshotForm.value.exchange_rate || 0)
   return Math.round(v)
@@ -272,7 +266,12 @@ onMounted(() => fetchData())
 .text-green { color: #10b981; }
 .text-blue { color: #3b82f6; }
 
-.fund-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+/* 電腦版：網格排列 */
+.fund-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+  gap: 16px; 
+}
 .fund-card { border-radius: 12px; border: none; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
 .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px; }
 .card-header h3 { margin: 0; font-size: 16px; color: #0f172a; }
@@ -289,13 +288,26 @@ onMounted(() => fetchData())
 .latest-info { font-size: 12px; color: #94a3b8; margin-top: 5px; text-align: right; }
 .preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px; border-radius: 6px; font-size: 14px; text-align: center; }
 
-/* 手機端優化 */
+/* 🚨 手機端優化：橫向滑動 */
 @media (max-width: 768px) {
   .header-actions { width: 100%; justify-content: flex-end; margin-top: 10px; }
+  
+  .fund-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 12px;
+    gap: 12px;
+  }
+  .fund-card {
+    flex: 0 0 85%; /* 卡片寬度佔 85%，露出下一張邊緣提示可以滑動 */
+    min-width: 280px;
+  }
 }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/FundView.vue
-V: 1793807900
+V: 1793808000
 W: ai-wa-fs-001
 ═══ -->
