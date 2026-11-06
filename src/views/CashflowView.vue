@@ -43,14 +43,12 @@
       <el-tabs v-model="activeTab">
         <el-tab-pane label="支出紀錄" name="expense">
           
-          <!-- 🆕 一鍵匯入固定支出按鈕 -->
           <div class="tool-bar">
             <el-button type="warning" plain icon="MagicStick" :loading="importing" @click="importFixedExpenses">
               一鍵匯入本月固定支出
             </el-button>
           </div>
 
-          <!-- 模式一：表格視圖 -->
           <div v-if="viewMode === 'table'" class="table-wrapper">
             <el-table :data="expenses" style="width: 100%; min-width: 600px;" stripe v-loading="loading">
               <el-table-column prop="name" label="項目名稱" min-width="150" />
@@ -70,24 +68,21 @@
                   <el-tag :type="scope.row.status === '已處理' ? 'success' : 'info'" size="small">{{ scope.row.status || '未處理' }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="120" align="center">
+              <el-table-column label="操作" width="140" align="center">
                 <template #default="scope">
                   <el-button type="primary" link size="small" @click="toggleExpenseStatus(scope.row)">
                     {{ scope.row.status === '已處理' ? '取消處理' : '標記處理' }}
                   </el-button>
+                  <el-button type="primary" link size="small" @click="openEditDialog(scope.row)">編輯</el-button>
                   <el-button type="danger" text size="small" @click="deleteRecord('expenses', scope.row.id)">刪除</el-button>
                 </template>
               </el-table-column>
             </el-table>
           </div>
 
-          <!-- 模式二：看板視圖 -->
           <div v-else class="kanban-wrapper" v-loading="loading">
-            <!-- 未處理區域 -->
             <div class="kanban-column">
-              <div class="kanban-header pending">
-                未處理 <el-tag size="small" type="info">{{ pendingExpenses.length }}</el-tag>
-              </div>
+              <div class="kanban-header pending">未處理 <el-tag size="small" type="info">{{ pendingExpenses.length }}</el-tag></div>
               <div class="kanban-list">
                 <el-card v-for="item in pendingExpenses" :key="item.id" class="kanban-card" shadow="hover">
                   <div class="card-title-row">
@@ -99,7 +94,8 @@
                     <span class="payer">{{ item.payer_name }}</span>
                   </div>
                   <div class="card-actions">
-                    <el-button type="primary" size="small" plain @click="toggleExpenseStatus(item)">標記已處理</el-button>
+                    <el-button type="primary" size="small" plain @click="toggleExpenseStatus(item)">標記處理</el-button>
+                    <el-button type="primary" size="small" text @click="openEditDialog(item)">編輯</el-button>
                     <el-button type="danger" size="small" text @click="deleteRecord('expenses', item.id)">刪除</el-button>
                   </div>
                 </el-card>
@@ -107,11 +103,8 @@
               </div>
             </div>
 
-            <!-- 已處理區域 -->
             <div class="kanban-column">
-              <div class="kanban-header done">
-                已處理 <el-tag size="small" type="success">{{ doneExpenses.length }}</el-tag>
-              </div>
+              <div class="kanban-header done">已處理 <el-tag size="small" type="success">{{ doneExpenses.length }}</el-tag></div>
               <div class="kanban-list">
                 <el-card v-for="item in doneExpenses" :key="item.id" class="kanban-card done-card" shadow="hover">
                   <div class="card-title-row">
@@ -124,6 +117,7 @@
                   </div>
                   <div class="card-actions">
                     <el-button type="info" size="small" plain @click="toggleExpenseStatus(item)">取消處理</el-button>
+                    <el-button type="primary" size="small" text @click="openEditDialog(item)">編輯</el-button>
                     <el-button type="danger" size="small" text @click="deleteRecord('expenses', item.id)">刪除</el-button>
                   </div>
                 </el-card>
@@ -133,7 +127,6 @@
           </div>
         </el-tab-pane>
         
-        <!-- 收入維持表格 -->
         <el-tab-pane label="收入紀錄" name="income">
           <div class="table-wrapper">
             <el-table :data="incomes" style="width: 100%; min-width: 400px;" stripe v-loading="loading">
@@ -144,8 +137,9 @@
                   <span class="text-green font-bold">HK$ {{ scope.row.amount.toLocaleString() }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="80" align="center">
+              <el-table-column label="操作" width="120" align="center">
                 <template #default="scope">
+                  <el-button type="primary" link size="small" @click="openEditDialog(scope.row)">編輯</el-button>
                   <el-button type="danger" text size="small" @click="deleteRecord('incomes', scope.row.id)">刪除</el-button>
                 </template>
               </el-table-column>
@@ -155,8 +149,8 @@
       </el-tabs>
     </el-card>
 
-    <!-- 新增彈窗 -->
-    <el-dialog v-model="dialogVisible" :title="`新增${activeTab === 'expense' ? '支出' : '收入'}`" width="90%" max-width="500px">
+    <!-- 新增/編輯彈窗 -->
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="90%" max-width="500px">
       <el-form :model="form" label-position="top">
         <el-form-item label="項目名稱" required>
           <el-input v-model="form.name" :placeholder="activeTab === 'expense' ? '例如：買餸、交租' : '例如：薪金、家用轉入'" />
@@ -196,7 +190,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MagicStick } from '@element-plus/icons-vue' // 🆕 引入圖示
+import { MagicStick } from '@element-plus/icons-vue'
 
 const d = new Date()
 const selectedMonth = ref(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
@@ -209,8 +203,13 @@ const members = ref([])
 const categories = ref([])
 const loading = ref(false)
 const submitting = ref(false)
-const importing = ref(false) // 🆕 匯入狀態
+const importing = ref(false)
 const dialogVisible = ref(false)
+const isEdit = ref(false) // 🆕 判斷是否為編輯模式
+
+const dialogTitle = computed(() => {
+  return isEdit.value ? '編輯紀錄' : `新增${activeTab.value === 'expense' ? '支出' : '收入'}`
+})
 
 const totalExpense = computed(() => expenses.value.reduce((sum, e) => sum + Number(e.amount), 0))
 const totalIncome = computed(() => incomes.value.reduce((sum, i) => sum + Number(i.amount), 0))
@@ -218,7 +217,7 @@ const totalIncome = computed(() => incomes.value.reduce((sum, i) => sum + Number
 const pendingExpenses = computed(() => expenses.value.filter(e => e.status !== '已處理'))
 const doneExpenses = computed(() => expenses.value.filter(e => e.status === '已處理'))
 
-const form = ref({ name: '', amount: 1, member_name: '', category_name: '', status: '未處理' })
+const form = ref({ id: null, name: '', amount: 1, member_name: '', category_name: '', status: '未處理' })
 
 const fetchDependencies = async () => {
   const [mRes, cRes] = await Promise.all([
@@ -244,30 +243,23 @@ const fetchData = async () => {
   loading.value = false
 }
 
-// 🆕 一鍵匯入固定支出
 const importFixedExpenses = async () => {
   try {
     importing.value = true
     const familyId = '00000000-0000-0000-0000-000000000001'
 
-    // 1. 取得模板與本月現有支出
     const [fixedRes, currentRes] = await Promise.all([
       supabase.from('fixed_expenses').select('*'),
       supabase.from('expenses').select('name').eq('year_month', selectedMonth.value)
     ])
 
     if (fixedRes.error) throw fixedRes.error
-    if (!fixedRes.data || fixedRes.data.length === 0) {
-      ElMessage.warning('尚未設定任何固定支出模板')
-      return
-    }
+    if (!fixedRes.data || fixedRes.data.length === 0) return ElMessage.warning('尚未設定任何固定支出模板')
 
     const existingNames = currentRes.data.map(e => e.name)
     const toInsert = []
 
-    // 2. 比對並準備要新增的資料
     fixedRes.data.forEach(tpl => {
-      // 如果本月已經有同名項目，就跳過不重複匯入
       if (!existingNames.includes(tpl.name)) {
         toInsert.push({
           family_id: familyId,
@@ -281,12 +273,8 @@ const importFixedExpenses = async () => {
       }
     })
 
-    if (toInsert.length === 0) {
-      ElMessage.info('本月所有固定支出皆已匯入，無需重複操作')
-      return
-    }
+    if (toInsert.length === 0) return ElMessage.info('本月所有固定支出皆已匯入')
 
-    // 3. 執行批次新增
     const { error } = await supabase.from('expenses').insert(toInsert)
     if (error) throw error
 
@@ -310,10 +298,24 @@ const toggleExpenseStatus = async (item) => {
 }
 
 const openAddDialog = () => {
+  isEdit.value = false
   const defaultMember = members.value.length > 0 ? members.value[0].name : ''
   const defaultCategory = categories.value.length > 0 ? categories.value[0].name : ''
-  
-  form.value = { name: '', amount: 1, member_name: defaultMember, category_name: defaultCategory, status: '未處理' }
+  form.value = { id: null, name: '', amount: 1, member_name: defaultMember, category_name: defaultCategory, status: '未處理' }
+  dialogVisible.value = true
+}
+
+// 🆕 打開編輯彈窗
+const openEditDialog = (row) => {
+  isEdit.value = true
+  form.value = {
+    id: row.id,
+    name: row.name,
+    amount: row.amount,
+    member_name: activeTab.value === 'expense' ? row.payer_name : row.member_name,
+    category_name: row.category_name || '',
+    status: row.status || '未處理'
+  }
   dialogVisible.value = true
 }
 
@@ -325,32 +327,56 @@ const submitForm = async () => {
   const familyId = '00000000-0000-0000-0000-000000000001'
   
   if (activeTab.value === 'expense') {
-    const { error } = await supabase.from('expenses').insert([{
-      family_id: familyId,
-      year_month: selectedMonth.value,
+    const payload = {
       name: form.value.name,
       amount: form.value.amount,
       payer_name: form.value.member_name,
       category_name: form.value.category_name,
       status: form.value.status
-    }])
+    }
+
+    let error
+    if (isEdit.value) {
+      const res = await supabase.from('expenses').update(payload).eq('id', form.value.id)
+      error = res.error
+    } else {
+      const res = await supabase.from('expenses').insert([{
+        ...payload,
+        family_id: familyId,
+        year_month: selectedMonth.value
+      }])
+      error = res.error
+    }
+
     if (error) ElMessage.error('儲存失敗：' + error.message)
     else {
-      ElMessage.success('✅ 支出已新增')
+      ElMessage.success(isEdit.value ? '✅ 支出已更新' : '✅ 支出已新增')
       dialogVisible.value = false
       fetchData()
     }
   } else {
-    const { error } = await supabase.from('incomes').insert([{
-      family_id: familyId,
-      year_month: selectedMonth.value,
+    const payload = {
       name: form.value.name,
       amount: form.value.amount,
       member_name: form.value.member_name
-    }])
+    }
+
+    let error
+    if (isEdit.value) {
+      const res = await supabase.from('incomes').update(payload).eq('id', form.value.id)
+      error = res.error
+    } else {
+      const res = await supabase.from('incomes').insert([{
+        ...payload,
+        family_id: familyId,
+        year_month: selectedMonth.value
+      }])
+      error = res.error
+    }
+
     if (error) ElMessage.error('儲存失敗：' + error.message)
     else {
-      ElMessage.success('✅ 收入已新增')
+      ElMessage.success(isEdit.value ? '✅ 收入已更新' : '✅ 收入已新增')
       dialogVisible.value = false
       fetchData()
     }
@@ -395,7 +421,6 @@ onMounted(() => {
 .font-bold { font-weight: 600; }
 .list-card { border-radius: 8px; border: none; overflow: hidden; }
 
-/* 🆕 工具列 */
 .tool-bar { margin-bottom: 15px; display: flex; justify-content: flex-end; }
 
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -457,6 +482,6 @@ onMounted(() => {
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793809900
+V: 1793810000
 W: ai-wa-fs-001
 ═══ -->
