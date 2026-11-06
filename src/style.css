@@ -1,9 +1,19 @@
 :root {
-  --primary-color: #3b82f6;
-  --bg-color: #f1f5f9;
+  /* 覆寫 Element Plus 主色調為 92 專案的靛藍色 */
+  --el-color-primary: #6366F1;
+  --el-color-primary-light-3: #818CF8;
+  --el-color-primary-light-5: #A5B4FC;
+  --el-color-primary-light-7: #C7D2FE;
+  --el-color-primary-light-8: #E0E7FF;
+  --el-color-primary-light-9: #EEF2FF;
+  --el-color-primary-dark-2: #4F46E5;
+
+  --bg-color: #F4F7FB;
   --text-main: #1e293b;
   --text-secondary: #64748b;
-  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  
+  /* 柔和陰影 */
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
 }
 
 * {
@@ -20,30 +30,47 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 覆寫 Element Plus 卡片樣式，統一圓角與陰影 */
+/* 覆寫卡片樣式：大圓角、無邊框、柔和陰影、懸停上浮 */
 .el-card {
-  border-radius: 12px !important;
-  border: none !important;
+  border-radius: 20px !important;
+  border: 1px solid rgba(0, 0, 0, 0.03) !important;
   box-shadow: var(--card-shadow) !important;
   background-color: #ffffff;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.el-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08) !important;
+}
+.el-card__header {
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 18px 24px !important;
+}
+.el-card__body {
+  padding: 24px !important;
 }
 
-/* 優化 Element Plus 表格樣式 */
+/* 優化表格樣式 */
 .el-table {
   --el-table-border-color: #f1f5f9;
-  --el-table-header-bg-color: #f8fafc;
-  border-radius: 8px;
+  --el-table-header-bg-color: #F8FAFC;
+  border-radius: 12px;
   overflow: hidden;
 }
 .el-table th.el-table__cell {
   font-weight: 600;
   color: #475569;
+  padding: 14px 0;
+}
+.el-table td.el-table__cell {
+  padding: 12px 0;
 }
 
 /* 優化對話框與彈窗 */
 .el-dialog {
-  border-radius: 16px !important;
+  border-radius: 20px !important;
   overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
 }
 .el-dialog__header {
   margin-right: 0;
@@ -58,23 +85,77 @@ body {
   padding: 24px !important;
 }
 
-/* 隱藏手機端滾動條，保持畫面乾淨 */
+/* 重寫標籤樣式：無邊框、淡背景 */
+.el-tag {
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0 10px !important;
+  font-weight: 500;
+  background-color: #F1F5F9;
+  color: #475569;
+}
+.el-tag--primary {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+.el-tag--success {
+  background-color: #ECFDF5;
+  color: #10B981;
+}
+.el-tag--warning {
+  background-color: #FFFBEB;
+  color: #F59E0B;
+}
+.el-tag--danger {
+  background-color: #FEF2F2;
+  color: #EF4444;
+}
+.el-tag--info {
+  background-color: #F8FAFC;
+  color: #64748B;
+}
+
+/* 按鈕圓角與過渡 */
+.el-button {
+  border-radius: 10px !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.el-button:active {
+  transform: scale(0.98);
+}
+
+/* 輸入框與下拉選單圓角 */
+.el-input__wrapper, .el-select__wrapper, .el-textarea__inner {
+  border-radius: 10px !important;
+  box-shadow: 0 0 0 1px #E2E8F0 inset !important;
+  background-color: #F8FAFC !important;
+}
+.el-input__wrapper.is-focus, .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-7) inset !important;
+  background-color: #FFFFFF !important;
+}
+
+/* 優化進度條 */
+.el-progress-bar__outer {
+  background-color: #F1F5F9 !important;
+  border-radius: 10px;
+}
+.el-progress-bar__inner {
+  border-radius: 10px;
+}
+
+/* 全局滾動條美化 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #CBD5E1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
-}
-
-/* 全局按鈕圓角 */
-.el-button {
-  border-radius: 8px;
-  font-weight: 500;
 }
 
 /* 確保手機端版面不會破版 */
@@ -86,6 +167,6 @@ body {
 
 /* ═══ EOF ═══
 F: AI-WA-FS/src/style.css
-V: 1793804110
-W: ai-wa-fs-001
+V: 1793971000
+W: ai-wa-fs-002
 ═══ */
