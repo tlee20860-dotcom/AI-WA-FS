@@ -14,7 +14,6 @@
       </div>
       
       <div class="header-actions">
-        <!-- 🆕 切換顯示模式 -->
         <el-radio-group v-model="viewMode" class="view-toggle">
           <el-radio-button label="table">表格</el-radio-button>
           <el-radio-button label="kanban">看板</el-radio-button>
@@ -127,7 +126,7 @@
           </div>
         </el-tab-pane>
         
-        <!-- 收入維持表格，因為通常不需要處理狀態 -->
+        <!-- 收入維持表格 -->
         <el-tab-pane label="收入紀錄" name="income">
           <div class="table-wrapper">
             <el-table :data="incomes" style="width: 100%; min-width: 400px;" stripe v-loading="loading">
@@ -149,7 +148,7 @@
       </el-tabs>
     </el-card>
 
-    <!-- 新增彈窗 (保持不變) -->
+    <!-- 新增彈窗 -->
     <el-dialog v-model="dialogVisible" :title="`新增${activeTab === 'expense' ? '支出' : '收入'}`" width="90%" max-width="500px">
       <el-form :model="form" label-position="top">
         <el-form-item label="項目名稱" required>
@@ -158,14 +157,15 @@
         <el-form-item label="金額 (HKD)" required>
           <el-input-number v-model="form.amount" :min="1" style="width: 100%" />
         </el-form-item>
+        
+        <!-- 🆕 動態成員選單 -->
         <el-form-item label="對象" required>
           <el-select v-model="form.member_name" style="width: 100%">
-            <el-option label="老公" value="老公" />
-            <el-option label="老婆" value="老婆" />
-            <el-option label="工人" value="工人" />
+            <el-option v-for="m in members" :key="m.id" :label="m.name" :value="m.name" />
             <el-option label="家庭共用" value="家庭共用" />
           </el-select>
         </el-form-item>
+        
         <el-form-item label="類別" v-if="activeTab === 'expense'">
           <el-select v-model="form.category_name" style="width: 100%" allow-create filterable default-first-option>
             <el-option label="日常飲食" value="日常飲食" />
@@ -176,6 +176,7 @@
             <el-option label="雜費" value="雜費" />
           </el-select>
         </el-form-item>
+        
         <el-form-item label="狀態" v-if="activeTab === 'expense'">
           <el-radio-group v-model="form.status">
             <el-radio label="未處理">未處理</el-radio>
@@ -200,9 +201,10 @@ const d = new Date()
 const selectedMonth = ref(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
 
 const activeTab = ref('expense')
-const viewMode = ref('table') // 🆕 'table' 或 'kanban'
+const viewMode = ref('table')
 const expenses = ref([])
 const incomes = ref([])
+const members = ref([]) // 🆕 儲存成員列表
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -210,11 +212,16 @@ const submitting = ref(false)
 const totalExpense = computed(() => expenses.value.reduce((sum, e) => sum + Number(e.amount), 0))
 const totalIncome = computed(() => incomes.value.reduce((sum, i) => sum + Number(i.amount), 0))
 
-// 🆕 區分未處理與已處理
 const pendingExpenses = computed(() => expenses.value.filter(e => e.status !== '已處理'))
 const doneExpenses = computed(() => expenses.value.filter(e => e.status === '已處理'))
 
 const form = ref({ name: '', amount: 1, member_name: '家庭共用', category_name: '日常飲食', status: '未處理' })
+
+// 🆕 獲取成員列表
+const fetchMembers = async () => {
+  const { data } = await supabase.from('members').select('*').order('created_at', { ascending: true })
+  if (data) members.value = data
+}
 
 const fetchData = async () => {
   loading.value = true
@@ -231,18 +238,19 @@ const fetchData = async () => {
   loading.value = false
 }
 
-// 🆕 一鍵切換處理狀態
 const toggleExpenseStatus = async (item) => {
   const newStatus = item.status === '已處理' ? '未處理' : '已處理'
   const { error } = await supabase.from('expenses').update({ status: newStatus }).eq('id', item.id)
   if (error) ElMessage.error('更新失敗：' + error.message)
   else {
-    item.status = newStatus // 畫面即時更新
+    item.status = newStatus
   }
 }
 
 const openAddDialog = () => {
-  form.value = { name: '', amount: 1, member_name: '家庭共用', category_name: '日常飲食', status: '未處理' }
+  // 如果有成員，預設選第一個，否則預設家庭共用
+  const defaultMember = members.value.length > 0 ? members.value[0].name : '家庭共用'
+  form.value = { name: '', amount: 1, member_name: defaultMember, category_name: '日常飲食', status: '未處理' }
   dialogVisible.value = true
 }
 
@@ -297,7 +305,10 @@ const deleteRecord = async (table, id) => {
   }
 }
 
-onMounted(() => fetchData())
+onMounted(() => {
+  fetchData()
+  fetchMembers() // 🆕 載入時抓取成員
+})
 </script>
 
 <style scoped>
@@ -319,10 +330,8 @@ onMounted(() => fetchData())
 .font-bold { font-weight: 600; }
 .list-card { border-radius: 8px; border: none; overflow: hidden; }
 
-/* 表格橫向滑動 */
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-/* 🆕 看板模式樣式 */
 .kanban-wrapper {
   display: flex;
   gap: 16px;
@@ -370,7 +379,6 @@ onMounted(() => fetchData())
 .card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 13px; color: #64748b; }
 .card-actions { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
 
-/* 手機端優化：看板變成上下排列 */
 @media (max-width: 768px) {
   .kanban-wrapper { flex-direction: column; overflow-x: hidden; }
   .kanban-column { min-width: 100%; }
@@ -380,6 +388,6 @@ onMounted(() => fetchData())
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793807300
+V: 1793809200
 W: ai-wa-fs-001
 ═══ -->
