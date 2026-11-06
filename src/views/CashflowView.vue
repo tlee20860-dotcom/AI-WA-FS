@@ -166,6 +166,7 @@
         </el-form-item>
         
         <el-form-item label="類別" v-if="activeTab === 'expense'">
+          <!-- 保留 allow-create 允許快速新增 -->
           <el-select v-model="form.category_name" style="width: 100%" allow-create filterable default-first-option>
             <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.name" />
           </el-select>
@@ -205,7 +206,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const importing = ref(false)
 const dialogVisible = ref(false)
-const isEdit = ref(false) // 🆕 判斷是否為編輯模式
+const isEdit = ref(false)
 
 const dialogTitle = computed(() => {
   return isEdit.value ? '編輯紀錄' : `新增${activeTab.value === 'expense' ? '支出' : '收入'}`
@@ -305,7 +306,6 @@ const openAddDialog = () => {
   dialogVisible.value = true
 }
 
-// 🆕 打開編輯彈窗
 const openEditDialog = (row) => {
   isEdit.value = true
   form.value = {
@@ -325,6 +325,18 @@ const submitForm = async () => {
   
   submitting.value = true
   const familyId = '00000000-0000-0000-0000-000000000001'
+
+  // 🆕 檢查是否為新分類，若是則自動存檔
+  if (activeTab.value === 'expense' && form.value.category_name) {
+    const isNewCategory = !categories.value.some(c => c.name === form.value.category_name)
+    if (isNewCategory) {
+      await supabase.from('expense_categories').insert([{
+        family_id: familyId,
+        name: form.value.category_name
+      }])
+      fetchDependencies() // 重新抓取分類
+    }
+  }
   
   if (activeTab.value === 'expense') {
     const payload = {
@@ -403,6 +415,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 樣式同上，保持不變 */
 .cashflow-container { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
 .header-left { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
@@ -482,6 +495,6 @@ onMounted(() => {
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793810000
+V: 1793811200
 W: ai-wa-fs-001
 ═══ -->
