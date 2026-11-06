@@ -31,6 +31,12 @@ const routes = [
     name: 'Fund',
     component: () => import('@/views/FundView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/annual-report',
+    name: 'AnnualReport',
+    component: () => import('@/views/AnnualReportView.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
@@ -52,6 +58,6 @@ export default router
 
 /* ═══ EOF ═══
 F: AI-WA-FS/src/router/index.js
-V: 1793807500
+V: 1793808500
 W: ai-wa-fs-001
 ═══ */
