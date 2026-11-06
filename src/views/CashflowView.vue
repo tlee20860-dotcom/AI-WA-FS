@@ -43,6 +43,13 @@
       <el-tabs v-model="activeTab">
         <el-tab-pane label="支出紀錄" name="expense">
           
+          <!-- 🆕 一鍵匯入固定支出按鈕 -->
+          <div class="tool-bar">
+            <el-button type="warning" plain icon="MagicStick" :loading="importing" @click="importFixedExpenses">
+              一鍵匯入本月固定支出
+            </el-button>
+          </div>
+
           <!-- 模式一：表格視圖 -->
           <div v-if="viewMode === 'table'" class="table-wrapper">
             <el-table :data="expenses" style="width: 100%; min-width: 600px;" stripe v-loading="loading">
@@ -165,7 +172,6 @@
         </el-form-item>
         
         <el-form-item label="類別" v-if="activeTab === 'expense'">
-          <!-- 🆕 動態分類選單，保留 allow-create 允許快速新增 -->
           <el-select v-model="form.category_name" style="width: 100%" allow-create filterable default-first-option>
             <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.name" />
           </el-select>
@@ -190,6 +196,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { MagicStick } from '@element-plus/icons-vue' // 🆕 引入圖示
 
 const d = new Date()
 const selectedMonth = ref(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
@@ -199,10 +206,11 @@ const viewMode = ref('table')
 const expenses = ref([])
 const incomes = ref([])
 const members = ref([])
-const categories = ref([]) // 🆕 儲存分類列表
+const categories = ref([])
 const loading = ref(false)
-const dialogVisible = ref(false)
 const submitting = ref(false)
+const importing = ref(false) // 🆕 匯入狀態
+const dialogVisible = ref(false)
 
 const totalExpense = computed(() => expenses.value.reduce((sum, e) => sum + Number(e.amount), 0))
 const totalIncome = computed(() => incomes.value.reduce((sum, i) => sum + Number(i.amount), 0))
@@ -212,7 +220,6 @@ const doneExpenses = computed(() => expenses.value.filter(e => e.status === '已
 
 const form = ref({ name: '', amount: 1, member_name: '', category_name: '', status: '未處理' })
 
-// 獲取成員與分類列表
 const fetchDependencies = async () => {
   const [mRes, cRes] = await Promise.all([
     supabase.from('members').select('*').order('created_at', { ascending: true }),
@@ -237,6 +244,62 @@ const fetchData = async () => {
   loading.value = false
 }
 
+// 🆕 一鍵匯入固定支出
+const importFixedExpenses = async () => {
+  try {
+    importing.value = true
+    const familyId = '00000000-0000-0000-0000-000000000001'
+
+    // 1. 取得模板與本月現有支出
+    const [fixedRes, currentRes] = await Promise.all([
+      supabase.from('fixed_expenses').select('*'),
+      supabase.from('expenses').select('name').eq('year_month', selectedMonth.value)
+    ])
+
+    if (fixedRes.error) throw fixedRes.error
+    if (!fixedRes.data || fixedRes.data.length === 0) {
+      ElMessage.warning('尚未設定任何固定支出模板')
+      return
+    }
+
+    const existingNames = currentRes.data.map(e => e.name)
+    const toInsert = []
+
+    // 2. 比對並準備要新增的資料
+    fixedRes.data.forEach(tpl => {
+      // 如果本月已經有同名項目，就跳過不重複匯入
+      if (!existingNames.includes(tpl.name)) {
+        toInsert.push({
+          family_id: familyId,
+          year_month: selectedMonth.value,
+          name: tpl.name,
+          amount: tpl.amount,
+          payer_name: tpl.payer_name,
+          category_name: tpl.category_name,
+          status: '未處理'
+        })
+      }
+    })
+
+    if (toInsert.length === 0) {
+      ElMessage.info('本月所有固定支出皆已匯入，無需重複操作')
+      return
+    }
+
+    // 3. 執行批次新增
+    const { error } = await supabase.from('expenses').insert(toInsert)
+    if (error) throw error
+
+    ElMessage.success(`✅ 成功匯入 ${toInsert.length} 筆固定支出`)
+    fetchData()
+
+  } catch (err) {
+    ElMessage.error('匯入失敗：' + err.message)
+  } finally {
+    importing.value = false
+  }
+}
+
 const toggleExpenseStatus = async (item) => {
   const newStatus = item.status === '已處理' ? '未處理' : '已處理'
   const { error } = await supabase.from('expenses').update({ status: newStatus }).eq('id', item.id)
@@ -247,7 +310,6 @@ const toggleExpenseStatus = async (item) => {
 }
 
 const openAddDialog = () => {
-  // 預設選取第一個成員與分類
   const defaultMember = members.value.length > 0 ? members.value[0].name : ''
   const defaultCategory = categories.value.length > 0 ? categories.value[0].name : ''
   
@@ -333,6 +395,9 @@ onMounted(() => {
 .font-bold { font-weight: 600; }
 .list-card { border-radius: 8px; border: none; overflow: hidden; }
 
+/* 🆕 工具列 */
+.tool-bar { margin-bottom: 15px; display: flex; justify-content: flex-end; }
+
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .kanban-wrapper {
@@ -387,10 +452,11 @@ onMounted(() => {
   .kanban-column { min-width: 100%; }
   .view-toggle { width: 100%; display: flex; justify-content: center; }
   .header-actions { width: 100%; justify-content: space-between; }
+  .tool-bar { justify-content: center; }
 }
 </style>
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793809600
+V: 1793809900
 W: ai-wa-fs-001
 ═══ -->
