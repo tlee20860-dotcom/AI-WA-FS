@@ -214,6 +214,56 @@ const deletePolicy = async (id, name) => {
   }
 }
 
+// 🆕 自動比對並補齊歷史繳費紀錄
+const syncInsurancePayments = async (policy) => {
+  if (!policy || !policy.start_date) return
+  
+  try {
+    const start = new Date(policy.start_date)
+    const now = new Date()
+    
+    // 收集需要的年月
+    const requiredMonths = []
+    let current = new Date(start.getFullYear(), start.getMonth(), 1)
+    const end = new Date(now.getFullYear(), now.getMonth(), 1)
+    
+    while (current <= end) {
+      const yyyy = current.getFullYear()
+      const mm = String(current.getMonth() + 1).padStart(2, '0')
+      requiredMonths.push(`${yyyy}-${mm}`)
+      current.setMonth(current.getMonth() + 1)
+    }
+
+    if (requiredMonths.length === 0) return
+
+    // 查詢現有紀錄
+    const { data: existingData, error: fetchErr } = await supabase
+      .from('insurance_payments')
+      .select('year_month')
+      .eq('policy_id', policy.id)
+
+    if (fetchErr) throw fetchErr
+
+    const existingMonths = new Set((existingData || []).map(d => d.year_month))
+    
+    // 比對缺失的月份
+    const missingMonths = requiredMonths.filter(m => !existingMonths.has(m))
+
+    if (missingMonths.length > 0) {
+      const toInsert = missingMonths.map(ym => ({
+        policy_id: policy.id,
+        year_month: ym,
+        status: '未轉'
+      }))
+      
+      const { error: insErr } = await supabase.from('insurance_payments').insert(toInsert)
+      if (insErr) throw insErr
+    }
+  } catch (err) {
+    console.error('同步歷史繳費紀錄失敗', err)
+  }
+}
+
 const submitForm = async () => {
   if (!form.value.name || !form.value.start_date || form.value.premium_amount <= 0) return ElMessage.warning('請填寫完整資訊')
   submitting.value = true
@@ -232,8 +282,11 @@ const submitForm = async () => {
   if (isEdit.value) {
     // 更新
     const { error } = await supabase.from('insurance_policies').update(payload).eq('id', form.value.id)
-    if (error) ElMessage.error('更新失敗：' + error.message)
-    else {
+    if (error) {
+      ElMessage.error('更新失敗：' + error.message)
+    } else {
+      // 🆕 編輯後同步補齊
+      await syncInsurancePayments({ id: form.value.id, start_date: form.value.start_date })
       ElMessage.success('✅ 保單已更新')
       dialogVisible.value = false
       fetchData()
@@ -249,41 +302,8 @@ const submitForm = async () => {
     if (error) {
       ElMessage.error('新增失敗：' + error.message)
     } else {
-      // 🆕 自動生成歷史待辦
-      try {
-        const start = new Date(form.value.start_date)
-        const now = new Date()
-        
-        // 計算要生成到哪一個月
-        const endMonthStr = currentYearMonth.value // 生成到當前月份
-        
-        let current = new Date(start.getFullYear(), start.getMonth(), 1)
-        const end = new Date(now.getFullYear(), now.getMonth(), 1)
-        
-        const paymentsToInsert = []
-        
-        while (current <= end) {
-          const yyyy = current.getFullYear()
-          const mm = String(current.getMonth() + 1).padStart(2, '0')
-          const ym = `${yyyy}-${mm}`
-          
-          paymentsToInsert.push({
-            policy_id: newPolicy.id,
-            year_month: ym,
-            status: '未轉'
-          })
-          
-          current.setMonth(current.getMonth() + 1)
-        }
-
-        if (paymentsToInsert.length > 0) {
-          const { error: insErr } = await supabase.from('insurance_payments').insert(paymentsToInsert)
-          if (insErr) console.error('自動生成歷史紀錄失敗', insErr)
-        }
-      } catch (e) {
-        console.error('生成歷史邏輯錯誤', e)
-      }
-
+      // 🆕 新增後生成歷史
+      await syncInsurancePayments(newPolicy)
       ElMessage.success('✅ 保單已新增，並已生成歷史待辦')
       dialogVisible.value = false
       fetchData()
@@ -327,6 +347,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/InsuranceView.vue
-V: 1793971500
+V: 1793972000
 W: ai-wa-fs-002
 ═══ -->
