@@ -189,7 +189,8 @@
         <el-tab-pane label="每月對帳" name="reconcile">
           <div class="tab-content">
             <div class="reconcile-hint" style="margin-bottom: 20px;">
-              請輸入每個月的「月初真實銀行結餘」。系統會自動推算該月月末結餘，並與下個月的月初結餘進行對比。
+              請輸入每個月的「月初真實銀行結餘」。系統會自動推算該月月末結餘，並與下個月的月初結餘進行對比。<br>
+              💡 提示：您可以直接點擊表格中的「月初實際結餘」欄位進行修改。
             </div>
             
             <div class="table-wrapper">
@@ -205,12 +206,20 @@
                     <span class="text-red">HK$ {{ scope.row.expense.toLocaleString() }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="月初實際結餘 (基準)" width="150" align="right">
+                <el-table-column label="月初實際結餘 (基準)" width="160" align="right">
                   <template #default="scope">
-                    <span v-if="scope.row.actualStart !== null" class="font-bold font-monospace text-blue">
-                      HK$ {{ scope.row.actualStart.toLocaleString() }}
-                    </span>
-                    <span v-else class="text-muted">未輸入</span>
+                    <div 
+                      class="editable-cell" 
+                      @click="openReconcileDialog(scope.row.month)"
+                      title="點擊修改"
+                    >
+                      <span v-if="scope.row.actualStart !== null" class="font-bold font-monospace text-blue">
+                        HK$ {{ scope.row.actualStart.toLocaleString() }}
+                      </span>
+                      <span v-else class="text-muted">
+                        + 點擊輸入
+                      </span>
+                    </div>
                   </template>
                 </el-table-column>
                 <el-table-column label="系統推算月末結餘" width="150" align="right">
@@ -793,8 +802,10 @@ onMounted(() => fetchData())
 .font-bold { font-weight: 600; }
 
 /* 對帳頁面專用 */
-.reconcile-hint { background: #EEF2FF; color: #6366F1; padding: 12px 16px; border-radius: 10px; font-size: 14px; }
+.reconcile-hint { background: #EEF2FF; color: #6366F1; padding: 12px 16px; border-radius: 10px; font-size: 14px; line-height: 1.6; }
 .font-monospace { font-family: monospace; }
+.editable-cell { cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.2s; display: inline-block; }
+.editable-cell:hover { background: #F1F5F9; }
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
@@ -806,6 +817,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1793986000
+V: 1793987000
 W: ai-wa-fs-002
 ═══ -->
