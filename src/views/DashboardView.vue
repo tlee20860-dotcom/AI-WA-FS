@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-container" v-loading="loading">
     <div class="page-header">
-      <h2>總覽儀表板</h2>
+      <h2>年度總覽</h2>
       <el-button type="primary" icon="DataLine" class="report-btn" @click="$router.push('/annual-report')">
         查看年度報表
       </el-button>
@@ -17,7 +17,7 @@
           <div class="card-content">
             <div class="asset-label">家庭總餘額</div>
             <div class="asset-value">HK$ {{ totalBalance.toLocaleString() }}</div>
-            <div class="asset-sub">共 1 個銀行帳號</div>
+            <div class="asset-sub">目前顯示最新結餘</div>
           </div>
         </el-card>
       </el-col>
@@ -292,6 +292,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/DashboardView.vue
-V: 1793971200
+V: 1793973000
 W: ai-wa-fs-002
 ═══ -->
