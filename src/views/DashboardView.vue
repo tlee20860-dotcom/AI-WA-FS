@@ -17,14 +17,17 @@
           <div class="card-content">
             <div class="asset-header">
               <div class="asset-label">家庭總餘額</div>
-              <el-button type="text" class="edit-btn" @click="openInitialDialog">
-                <el-icon><Setting /></el-icon> 設定初始餘額
-              </el-button>
             </div>
             <div class="asset-value" :class="totalBalance < 0 ? 'text-red' : ''">
               HK$ {{ totalBalance.toLocaleString() }}
             </div>
-            <div class="asset-sub">期初餘額 + 歷史總收入 - 歷史已處理支出</div>
+            <div class="asset-sub" v-if="latestBalanceRecord">
+              <el-tag size="small" type="success" effect="dark" class="mr-2">對帳基準：{{ latestBalanceRecord.year_month }}</el-tag>
+              {{ latestBalanceRecord.year_month }} 結餘 + 後續收支推算
+            </div>
+            <div class="asset-sub text-orange" v-else>
+              ⚠️ 尚未設定對帳基準，目前顯示歷史累計推算。請至「月度總覽」輸入真實餘額。
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -102,22 +105,6 @@
         </el-table>
       </div>
     </el-card>
-
-    <!-- 期初餘額設定彈窗 -->
-    <el-dialog v-model="dialogVisible" title="設定期初餘額" width="90%" max-width="400px">
-      <el-form label-position="top">
-        <div class="preview-box" style="margin-bottom: 15px; background: #EEF2FF; color: #6366F1;">
-          <span>請輸入您開始使用此系統前的真實銀行存款總額。系統將以此為基準，加上後續的收支來推算總餘額。</span>
-        </div>
-        <el-form-item label="期初銀行餘額 (HKD)" required>
-          <el-input-number v-model="inputInitialBalance" :min="0" style="width: 100%" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveInitialBalance">確認儲存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -125,28 +112,29 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '@/config/supabase'
 import { ElMessage } from 'element-plus'
-import { TrendCharts, Bottom, Wallet, DataLine, Money, Setting } from '@element-plus/icons-vue'
+import { TrendCharts, Bottom, Wallet, DataLine, Money } from '@element-plus/icons-vue'
 
 const loading = ref(false)
-const saving = ref(false)
 
 // 狀態
-const initialBalance = ref(0)
+const latestBalanceRecord = ref(null)
 const allTimeIncome = ref(0)
 const allTimeExpense = ref(0)
 const annualData = ref([])
 const activeMonthsCount = ref(0)
 
-// 彈窗狀態
-const dialogVisible = ref(false)
-const inputInitialBalance = ref(0)
-
 const currentYear = new Date().getFullYear()
-const familyId = '00000000-0000-0000-0000-000000000001'
 
-// 計算總餘額
+// 家庭總餘額推算
 const totalBalance = computed(() => {
-  return initialBalance.value + allTimeIncome.value - allTimeExpense.value
+  if (latestBalanceRecord.value) {
+    // 如果有對帳紀錄，使用該紀錄為基準
+    const baseAmount = Number(latestBalanceRecord.value.actual_balance)
+    return baseAmount + allTimeIncome.value - allTimeExpense.value
+  } else {
+    // 如果從未對帳過，顯示歷史累計 (即 0 + 收入 - 支出)
+    return allTimeIncome.value - allTimeExpense.value
+  }
 })
 
 // 取得當前年度資料
@@ -158,52 +146,24 @@ const currentYearIncome = computed(() => currentYearData.value.income)
 const currentYearExpense = computed(() => currentYearData.value.expense)
 const currentYearNet = computed(() => currentYearData.value.net)
 
-const openInitialDialog = () => {
-  inputInitialBalance.value = initialBalance.value
-  dialogVisible.value = true
-}
-
-const saveInitialBalance = async () => {
-  if (inputInitialBalance.value === null || inputInitialBalance.value < 0) {
-    return ElMessage.warning('請輸入有效金額')
-  }
-  saving.value = true
-  try {
-    const { error } = await supabase
-      .from('families')
-      .update({ initial_balance: inputInitialBalance.value })
-      .eq('id', familyId)
-    
-    if (error) throw error
-    
-    initialBalance.value = inputInitialBalance.value
-    ElMessage.success('✅ 期初餘額已更新')
-    dialogVisible.value = false
-  } catch (err) {
-    ElMessage.error('儲存失敗：' + err.message)
-  } finally {
-    saving.value = false
-  }
-}
-
 const fetchDashboardData = async () => {
   loading.value = true
   
   try {
-    // 1. 抓取家庭期初餘額
-    const { data: familyData } = await supabase
-      .from('families')
-      .select('initial_balance')
-      .eq('id', familyId)
+    const familyId = '00000000-0000-0000-0000-000000000001'
+
+    // 1. 抓取最新一筆對帳紀錄
+    const { data: balData } = await supabase
+      .from('monthly_balances')
+      .select('year_month, actual_balance')
+      .eq('family_id', familyId)
+      .order('year_month', { ascending: false })
+      .limit(1)
       .maybeSingle()
     
-    if (familyData && familyData.initial_balance) {
-      initialBalance.value = Number(familyData.initial_balance)
-    } else {
-      initialBalance.value = 0
-    }
+    latestBalanceRecord.value = balData
 
-    // 2. 抓取所有收支紀錄 (用於計算年度與歷史總額)
+    // 2. 抓取所有收支紀錄
     const [incRes, expRes, insRes, polRes] = await Promise.all([
       supabase.from('incomes').select('year_month, amount'),
       supabase.from('expenses').select('year_month, amount').eq('status', '已處理'),
@@ -226,16 +186,22 @@ const fetchDashboardData = async () => {
       tempYears[y] = { year: y, income: 0, expense: 0, net: 0 }
     }
 
-    // 重設歷史總額
+    // 重設「基準點之後」的收支累計
     allTimeIncome.value = 0
     allTimeExpense.value = 0
 
-    // 3. 計算收入 (同時累加歷史總收入)
+    const baseYM = latestBalanceRecord.value ? latestBalanceRecord.value.year_month : '0000-00'
+
+    // 3. 計算收入
     if (incRes.data) {
       incRes.data.forEach(item => {
         if (!item.year_month) return
         const amount = Number(item.amount)
-        allTimeIncome.value += amount
+        
+        // 只有大於基準月份的才計入總餘額推算
+        if (item.year_month > baseYM) {
+          allTimeIncome.value += amount
+        }
         
         const y = parseInt(item.year_month.split('-')[0])
         if (tempYears[y]) {
@@ -244,13 +210,16 @@ const fetchDashboardData = async () => {
       })
     }
 
-    // 4. 計算一般支出 (已處理) (同時累加歷史總支出)
+    // 4. 計算一般支出 (已處理)
     const monthsWithData = new Set()
     if (expRes.data) {
       expRes.data.forEach(item => {
         if (!item.year_month) return
         const amount = Number(item.amount)
-        allTimeExpense.value += amount
+        
+        if (item.year_month > baseYM) {
+          allTimeExpense.value += amount
+        }
         
         const y = parseInt(item.year_month.split('-')[0])
         if (tempYears[y]) {
@@ -260,12 +229,15 @@ const fetchDashboardData = async () => {
       })
     }
 
-    // 5. 計算保險支出 (已轉) (同時累加歷史總支出)
+    // 5. 計算保險支出 (已轉)
     if (insRes.data) {
       insRes.data.forEach(item => {
         if (!item.year_month) return
         const amount = policyMap[item.policy_id] || 0
-        allTimeExpense.value += amount
+        
+        if (item.year_month > baseYM) {
+          allTimeExpense.value += amount
+        }
         
         const y = parseInt(item.year_month.split('-')[0])
         if (tempYears[y]) {
@@ -331,11 +303,10 @@ onMounted(() => {
 .card-content { flex: 1; }
 .asset-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .asset-label { font-size: 15px; color: #94a3b8; }
-.edit-btn { color: #94a3b8; padding: 0; font-size: 13px; transition: color 0.2s; }
-.edit-btn:hover { color: #38bdf8; }
 .asset-value { font-size: 36px; font-weight: bold; font-family: monospace; margin-bottom: 6px; }
 .asset-value.text-red { color: #f87171; }
-.asset-sub { font-size: 13px; color: #64748b; }
+.asset-sub { font-size: 13px; color: #64748b; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.asset-sub.text-orange { color: #fb923c; }
 
 /* 統計卡片 */
 .stat-card { border-radius: 20px; border: none; position: relative; overflow: hidden; height: 100%; }
@@ -363,7 +334,7 @@ onMounted(() => {
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .ml-2 { margin-left: 8px; }
-.preview-box { padding: 12px 16px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+.mr-2 { margin-right: 8px; }
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
@@ -376,6 +347,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/DashboardView.vue
-V: 1793976000
+V: 1793978000
 W: ai-wa-fs-002
 ═══ -->
