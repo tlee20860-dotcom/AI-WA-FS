@@ -148,13 +148,9 @@
           </el-col>
         </el-row>
         
-        <el-form-item label="匯率 (USD to HKD)" required>
-          <el-input-number v-model="snapshotForm.exchange_rate" :precision="4" :step="0.1" style="width: 100%" />
+        <el-form-item label="保單貨幣價值 (HKD)" required>
+          <el-input-number v-model="snapshotForm.total_value_hkd" :precision="2" :step="1" style="width: 100%" placeholder="請輸入 App 顯示的 HKD 現值" />
         </el-form-item>
-
-        <div class="preview-box" v-if="snapshotForm.units && snapshotForm.nav">
-          預估 HKD 現值：<strong>HK$ {{ computedSnapshotValue.toLocaleString() }}</strong>
-        </div>
       </el-form>
       <template #footer>
         <el-button @click="snapshotDialogVisible = false">取消</el-button>
@@ -185,7 +181,6 @@
           <el-table-column prop="year_month" label="日期" width="120" />
           <el-table-column prop="units" label="單位數" width="100" align="right" />
           <el-table-column prop="nav" label="價格 (USD)" width="100" align="right" />
-          <el-table-column prop="exchange_rate" label="匯率" width="80" align="right" />
           <el-table-column prop="total_value_hkd" label="總值 (HKD)" align="right">
             <template #default="scope">
               <span class="font-bold text-blue">HK$ {{ Number(scope.row.total_value_hkd).toLocaleString() }}</span>
@@ -225,7 +220,7 @@ const historyDialogVisible = ref(false)
 const isEditFund = ref(false)
 const isLinkedToPolicy = ref(false)
 const fundForm = ref({ id: null, name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 })
-const snapshotForm = ref({ fund_id: '', year_month: new Date().toISOString().slice(0, 10), units: 0, nav: 0, exchange_rate: 7.8 })
+const snapshotForm = ref({ fund_id: '', year_month: new Date().toISOString().slice(0, 10), units: 0, nav: 0, total_value_hkd: 0 })
 
 // 提款狀態
 const currentFund = ref(null)
@@ -270,7 +265,6 @@ const totalPnl = computed(() => totalValue.value - totalCost.value)
 const getLatestSnapshot = (fund) => {
   const fSnaps = snapshots.value.filter(s => s.fund_id === fund.id)
   if (fSnaps.length === 0) return null
-  // 因為現在是 YYYY-MM-DD，字串比較依然適用
   return fSnaps.sort((a, b) => b.year_month.localeCompare(a.year_month))[0]
 }
 
@@ -278,11 +272,6 @@ const getLatestValue = (fund) => {
   const latest = getLatestSnapshot(fund)
   return latest ? Number(latest.total_value_hkd) : 0
 }
-
-const computedSnapshotValue = computed(() => {
-  const v = (snapshotForm.value.units || 0) * (snapshotForm.value.nav || 0) * (snapshotForm.value.exchange_rate || 0)
-  return Math.round(v)
-})
 
 const fetchData = async () => {
   loading.value = true
@@ -411,21 +400,23 @@ const openSnapshotDialog = () => {
   snapshotForm.value = {
     fund_id: funds.value[0].id,
     year_month: new Date().toISOString().slice(0, 10),
-    units: 0, nav: 0, exchange_rate: 7.8
+    units: 0, nav: 0, total_value_hkd: 0
   }
   snapshotDialogVisible.value = true
 }
 
 const submitSnapshot = async () => {
   if (!snapshotForm.value.fund_id || !snapshotForm.value.year_month) return ElMessage.warning('請填寫完整')
+  if (snapshotForm.value.total_value_hkd <= 0) return ElMessage.warning('請輸入保單貨幣價值 (HKD)')
+  
   submitting.value = true
   const { error } = await supabase.from('fund_snapshots').insert([{
     fund_id: snapshotForm.value.fund_id,
     year_month: snapshotForm.value.year_month,
     units: snapshotForm.value.units,
     nav: snapshotForm.value.nav,
-    exchange_rate: snapshotForm.value.exchange_rate,
-    total_value_hkd: computedSnapshotValue.value
+    exchange_rate: 1, // 保留欄位但不參與計算，預設給 1
+    total_value_hkd: snapshotForm.value.total_value_hkd
   }])
   submitting.value = false
   if (error) ElMessage.error('失敗：' + error.message)
@@ -499,6 +490,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/FundView.vue
-V: 1793990000
+V: 1793991000
 W: ai-wa-fs-002
 ═══ -->
