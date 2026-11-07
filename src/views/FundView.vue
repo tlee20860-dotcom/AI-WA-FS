@@ -9,7 +9,7 @@
     </div>
 
     <!-- 總計卡片 -->
-    <el-row :gutter="10" class="mb-20">
+    <el-row :gutter="20" class="mb-20">
       <el-col :xs="12" :sm="8">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">總投入成本</div>
@@ -50,7 +50,10 @@
               <el-tag size="small" type="info">獨立基金</el-tag>
             </div>
           </div>
-          <el-button type="danger" text size="small" @click="deleteFund(fund.id)">刪除</el-button>
+          <div class="header-actions-btn">
+            <el-button type="primary" text size="small" @click="openFundDialog(fund)">編輯</el-button>
+            <el-button type="danger" text size="small" @click="deleteFund(fund.id)">刪除</el-button>
+          </div>
         </div>
         
         <div class="card-body">
@@ -78,7 +81,7 @@
           </div>
         </div>
 
-        <!-- 🆕 操作按鈕區 -->
+        <!-- 操作按鈕區 -->
         <div class="card-actions">
           <el-button type="primary" link size="small" @click="openHistoryDialog(fund)">查看歷史快照</el-button>
           <el-button type="warning" size="small" plain @click="openWithdrawDialog(fund)">記錄提款/轉出</el-button>
@@ -86,8 +89,8 @@
       </el-card>
     </div>
 
-    <!-- 新增基金彈窗 -->
-    <el-dialog v-model="fundDialogVisible" title="新增基金" width="90%" max-width="450px">
+    <!-- 新增/編輯基金彈窗 -->
+    <el-dialog v-model="fundDialogVisible" :title="isEditFund ? '編輯基金' : '新增基金'" width="90%" max-width="450px">
       <el-form :model="fundForm" label-position="top">
         <el-form-item label="基金名稱" required>
           <el-input v-model="fundForm.name" placeholder="例如：駿利亨德森遠見基金" />
@@ -175,7 +178,7 @@
       </template>
     </el-dialog>
 
-    <!-- 🆕 歷史快照彈窗 -->
+    <!-- 歷史快照彈窗 -->
     <el-dialog v-model="historyDialogVisible" :title="`歷史快照 - ${currentFund?.name}`" width="90%" max-width="600px">
       <div class="table-wrapper">
         <el-table :data="currentFundSnaps" style="width: 100%; min-width: 500px;" stripe>
@@ -216,18 +219,19 @@ const submitting = ref(false)
 const fundDialogVisible = ref(false)
 const snapshotDialogVisible = ref(false)
 const withdrawDialogVisible = ref(false)
-const historyDialogVisible = ref(false) // 🆕
+const historyDialogVisible = ref(false)
 
 // 表單狀態
+const isEditFund = ref(false)
 const isLinkedToPolicy = ref(false)
-const fundForm = ref({ name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 })
+const fundForm = ref({ id: null, name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 })
 const snapshotForm = ref({ fund_id: '', year_month: new Date().toISOString().slice(0, 7), units: 0, nav: 0, exchange_rate: 7.8 })
 
 // 提款狀態
 const currentFund = ref(null)
 const withdrawAmount = ref(0)
 
-// 🆕 歷史快照狀態
+// 歷史快照狀態
 const currentFundSnaps = ref([])
 
 const fundPolicies = computed(() => policies.value.filter(p => p.type === 'fund_insurance'))
@@ -292,25 +296,21 @@ const fetchData = async () => {
   loading.value = false
 }
 
-// 🆕 打開歷史快照彈窗
 const openHistoryDialog = (fund) => {
   currentFund.value = fund
-  // 篩選該基金的所有快照，並按時間降序排列
   currentFundSnaps.value = snapshots.value
     .filter(s => s.fund_id === fund.id)
     .sort((a, b) => b.year_month.localeCompare(a.year_month))
   historyDialogVisible.value = true
 }
 
-// 🆕 刪除快照
 const deleteSnapshot = async (id) => {
   try {
     await ElMessageBox.confirm('確定要刪除這筆快照嗎？這將會影響該月的盈虧計算。', '警告', { type: 'warning' })
     const { error } = await supabase.from('fund_snapshots').delete().eq('id', id)
     if (error) throw error
     ElMessage.success('已刪除')
-    fetchData() // 重新抓取
-    // 重新整理彈窗內的列表
+    fetchData()
     currentFundSnaps.value = currentFundSnaps.value.filter(s => s.id !== id)
   } catch (err) {
     if (err !== 'cancel') ElMessage.error('刪除失敗')
@@ -342,9 +342,24 @@ const submitWithdraw = async () => {
   }
 }
 
-const openFundDialog = () => {
-  isLinkedToPolicy.value = false
-  fundForm.value = { name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 }
+const openFundDialog = (fund = null) => {
+  if (fund) {
+    // 編輯模式
+    isEditFund.value = true
+    isLinkedToPolicy.value = !!fund.policy_id
+    fundForm.value = {
+      id: fund.id,
+      name: fund.name,
+      policy_id: fund.policy_id || '',
+      allocation_pct: Number(fund.allocation_pct) || 0,
+      manual_cost: Number(fund.manual_cost) || 0
+    }
+  } else {
+    // 新增模式
+    isEditFund.value = false
+    isLinkedToPolicy.value = false
+    fundForm.value = { id: null, name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 }
+  }
   fundDialogVisible.value = true
 }
 
@@ -352,7 +367,6 @@ const submitFund = async () => {
   if (!fundForm.value.name) return ElMessage.warning('請輸入名稱')
   
   let payload = {
-    family_id: '00000000-0000-0000-0000-000000000001',
     name: fundForm.value.name,
     policy_id: null,
     allocation_pct: 0,
@@ -369,12 +383,27 @@ const submitFund = async () => {
   }
 
   submitting.value = true
-  const { error } = await supabase.from('funds').insert([payload])
+  
+  let error
+  if (isEditFund.value) {
+    // 更新
+    const res = await supabase.from('funds').update(payload).eq('id', fundForm.value.id)
+    error = res.error
+  } else {
+    // 新增
+    const res = await supabase.from('funds').insert([{
+      ...payload,
+      family_id: '00000000-0000-0000-0000-000000000001'
+    }])
+    error = res.error
+  }
+
   submitting.value = false
   
-  if (error) ElMessage.error('失敗：' + error.message)
-  else {
-    ElMessage.success('✅ 基金已新增')
+  if (error) {
+    ElMessage.error('失敗：' + error.message)
+  } else {
+    ElMessage.success(isEditFund.value ? '✅ 基金已更新' : '✅ 基金已新增')
     fundDialogVisible.value = false
     fetchData()
   }
@@ -445,6 +474,7 @@ onMounted(() => fetchData())
 .fund-card { border-radius: 12px; border: none; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px; }
 .card-header h3 { margin: 0 0 5px 0; font-size: 16px; color: #0f172a; }
+.header-actions-btn { display: flex; align-items: center; }
 .linked-policy { font-size: 12px; }
 
 .card-body { display: flex; flex-direction: column; gap: 8px; }
@@ -459,7 +489,6 @@ onMounted(() => fetchData())
 .latest-info { font-size: 12px; color: #94a3b8; margin-top: 5px; text-align: right; }
 .preview-box { background: #eff6ff; color: #1d4ed8; padding: 10px 15px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
 
-/* 🆕 按鈕區排版 */
 .card-actions { display: flex; justify-content: space-between; margin-top: 10px; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
 
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -470,8 +499,9 @@ onMounted(() => fetchData())
   .fund-card { flex: 0 0 85%; min-width: 280px; }
 }
 </style>
+
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/FundView.vue
-V: 1793811100
-W: ai-wa-fs-001
+V: 1793973400
+W: ai-wa-fs-002
 ═══ -->
