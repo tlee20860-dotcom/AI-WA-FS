@@ -39,6 +39,10 @@
           <el-icon><Money /></el-icon>
           <template #title>月度總覽</template>
         </el-menu-item>
+        <el-menu-item index="/member-report">
+          <el-icon><User /></el-icon>
+          <template #title>成員收支</template>
+        </el-menu-item>
         <el-menu-item index="/settlement">
           <el-icon><Tickets /></el-icon>
           <template #title>待辦與紀錄中心</template>
@@ -82,7 +86,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '@/config/supabase'
-import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document, Setting, Tickets } from '@element-plus/icons-vue'
+import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document, Setting, Tickets, User } from '@element-plus/icons-vue'
 
 const isCollapse = ref(false)
 const isMobile = ref(false)
@@ -242,6 +246,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793972400
+V: 1793974200
 W: ai-wa-fs-002
 ═══ -->
