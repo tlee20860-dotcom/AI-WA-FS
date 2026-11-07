@@ -184,49 +184,45 @@
           </div>
         </el-tab-pane>
 
-        <!-- 5. 每月對帳 (🆕) -->
+        <!-- 5. 每月對帳 -->
         <el-tab-pane label="每月對帳" name="reconcile">
           <div class="tab-content">
-            <div class="reconcile-hint">
-              以下表格會自動推算每月應有結餘。請在「實際銀行結餘」欄位輸入您對帳後的數字，系統將以此為基準推算後續月份。
+            <div class="tool-bar" style="justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+              <div class="reconcile-hint" style="flex: 1; min-width: 250px; margin-bottom: 10px;">
+                請輸入每個月的「月初真實銀行結餘」。系統會自動推算該月月末結餘，並與下個月的月初結餘進行對比。
+              </div>
+              <el-button type="primary" @click="openReconcileDialog()">+ 輸入月初結餘</el-button>
             </div>
             
             <div class="table-wrapper">
-              <el-table :data="reconcileData" style="width: 100%; min-width: 700px;" stripe>
-                <el-table-column prop="month" label="月份" width="120" />
-                <el-table-column prop="income" label="總收入" width="120" align="right">
+              <el-table :data="reconcileData" style="width: 100%; min-width: 800px;" stripe>
+                <el-table-column prop="month" label="月份" width="100" />
+                <el-table-column prop="income" label="本月收入" width="110" align="right">
                   <template #default="scope">
                     <span class="text-green">HK$ {{ scope.row.income.toLocaleString() }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="expense" label="總支出" width="120" align="right">
+                <el-table-column prop="expense" label="本月支出" width="110" align="right">
                   <template #default="scope">
                     <span class="text-red">HK$ {{ scope.row.expense.toLocaleString() }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="calculated" label="系統推算結餘" width="140" align="right">
+                <el-table-column label="月初實際結餘 (基準)" width="150" align="right">
                   <template #default="scope">
-                    <span class="font-bold font-monospace">HK$ {{ scope.row.calculated.toLocaleString() }}</span>
+                    <span v-if="scope.row.actualStart !== null" class="font-bold font-monospace text-blue">
+                      HK$ {{ scope.row.actualStart.toLocaleString() }}
+                    </span>
+                    <span v-else class="text-muted">未輸入</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="實際銀行結餘" width="200">
+                <el-table-column label="系統推算月末結餘" width="150" align="right">
                   <template #default="scope">
-                    <div class="input-wrapper">
-                      <el-input-number 
-                        v-model="scope.row.actual" 
-                        :controls="false" 
-                        placeholder="請輸入"
-                        size="small"
-                        style="width: 130px;"
-                        @change="(val) => saveMonthlyBalance(scope.row.month, val)"
-                      />
-                      <span v-if="scope.row.actual !== null" class="ml-2 font-bold font-monospace" style="font-size: 14px;">元</span>
-                    </div>
+                    <span class="font-bold font-monospace">HK$ {{ scope.row.calculatedEnd.toLocaleString() }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="差異對比" width="140" align="right">
+                <el-table-column label="對比下月差異" width="150" align="right">
                   <template #default="scope">
-                    <div v-if="scope.row.actual !== null">
+                    <div v-if="scope.row.diff !== null">
                       <el-tag v-if="Math.abs(scope.row.diff) < 1" type="success" effect="light">
                         🟢 相符
                       </el-tag>
@@ -244,7 +240,7 @@
       </el-tabs>
     </el-card>
 
-    <!-- 新增/編輯彈窗 -->
+    <!-- 新增/編輯收支彈窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="90%" max-width="500px">
       <el-form :model="form" label-position="top">
         <el-form-item label="紀錄月份" required>
@@ -282,6 +278,22 @@
       </template>
     </el-dialog>
 
+    <!-- 輸入對帳餘額彈窗 -->
+    <el-dialog v-model="reconcileDialogVisible" title="輸入月初實際結餘" width="90%" max-width="400px">
+      <el-form :model="reconcileForm" label-position="top">
+        <el-form-item label="選擇月份" required>
+          <el-date-picker v-model="reconcileForm.year_month" type="month" placeholder="選擇月份" value-format="YYYY-MM" style="width: 100%" @change="onReconcileMonthChange" />
+        </el-form-item>
+        <el-form-item label="月初真實結餘 (HKD)" required>
+          <el-input-number v-model="reconcileForm.actual_balance" :min="0" style="width: 100%" placeholder="請輸入金額" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="reconcileDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submittingReconcile" @click="submitReconcile">確認儲存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 匯入固定支出彈窗 -->
     <el-dialog v-model="importDialogVisible" title="匯入固定支出" width="90%" max-width="400px">
       <el-form label-position="top">
@@ -316,7 +328,7 @@ const importing = ref(false)
 const rawIncomes = ref([])
 const rawExpenses = ref([])
 const rawInsurancePayments = ref([])
-const rawBalances = ref([]) // 🆕 對帳紀錄
+const rawBalances = ref([])
 const policies = ref([])
 const members = ref([])
 const categories = ref([])
@@ -327,11 +339,16 @@ const checkAll = ref(false)
 const activePendingCollapse = ref([])
 const activeDoneCollapse = ref([])
 
-// 新增/編輯彈窗狀態
+// 新增/編輯收支彈窗狀態
 const dialogVisible = ref(false)
 const dialogType = ref('expense')
 const isEdit = ref(false)
 const form = ref({ id: null, year_month: '', name: '', amount: 1, member_name: '', category_name: '', status: '未處理' })
+
+// 對帳彈窗狀態
+const reconcileDialogVisible = ref(false)
+const submittingReconcile = ref(false)
+const reconcileForm = ref({ year_month: '', actual_balance: 0 })
 
 // 匯入彈窗狀態
 const importDialogVisible = ref(false)
@@ -414,7 +431,7 @@ const allProcessedItems = computed(() => {
       }
     }
   })
-  return items.sort((a, b) => b.year_month.localeCompare(a.year_month)) // 由新到舊
+  return items.sort((a, b) => b.year_month.localeCompare(a.year_month))
 })
 
 const groupByMonth = (items) => {
@@ -431,77 +448,108 @@ const groupByMonth = (items) => {
 const pendingGroups = computed(() => groupByMonth(allPendingItems.value).sort((a, b) => a.month.localeCompare(b.month)))
 const processedGroups = computed(() => groupByMonth(allProcessedItems.value))
 
-// 🆕 計算對帳資料
+// 🆕 計算對帳資料 (月初餘額推算月末)
 const reconcileData = computed(() => {
-  // 1. 收集所有發生過帳目的月份
+  // 收集所有發生過帳目的月份
   const monthSet = new Set()
   rawIncomes.value.forEach(i => monthSet.add(i.year_month))
   rawExpenses.value.forEach(e => monthSet.add(e.year_month))
   rawInsurancePayments.value.forEach(ip => monthSet.add(ip.year_month))
   rawBalances.value.forEach(b => monthSet.add(b.year_month))
   
-  // 2. 排序（由舊到新）
+  // 由舊到新排序
   const sortedMonths = Array.from(monthSet).filter(Boolean).sort()
   
-  let runningBalance = 0
   const result = []
+  let lastCalculatedEnd = 0
   
-  sortedMonths.forEach(month => {
-    // 計算本月收支
-    const mInc = rawIncomes.value.filter(i => i.year_month === month).reduce((sum, i) => sum + Number(i.amount), 0)
-    const mExp = rawExpenses.value.filter(e => e.year_month === month && e.status === '已處理').reduce((sum, e) => sum + Number(e.amount), 0)
+  for (let i = 0; i < sortedMonths.length; i++) {
+    const month = sortedMonths[i]
     
+    // 本月收支
+    const mInc = rawIncomes.value.filter(x => x.year_month === month).reduce((sum, x) => sum + Number(x.amount), 0)
+    const mExp = rawExpenses.value.filter(x => x.year_month === month && x.status === '已處理').reduce((sum, x) => sum + Number(x.amount), 0)
     const policyMap = {}
     policies.value.forEach(p => { policyMap[p.id] = Number(p.monthly_average) })
-    const mIns = rawInsurancePayments.value.filter(ip => ip.year_month === month && ip.status === '已轉').reduce((sum, ip) => sum + (policyMap[ip.policy_id] || 0), 0)
-    
+    const mIns = rawInsurancePayments.value.filter(x => x.year_month === month && x.status === '已轉').reduce((sum, x) => sum + (policyMap[x.policy_id] || 0), 0)
     const totalExpense = mExp + mIns
-    const calculatedBalance = runningBalance + mInc - totalExpense
     
-    // 查找實際結餘
+    // 本月月初結餘
     const balanceRecord = rawBalances.value.find(b => b.year_month === month)
-    const actualBalance = balanceRecord ? Number(balanceRecord.actual_balance) : null
+    const actualStart = balanceRecord ? Number(balanceRecord.actual_balance) : null
     
-    let diff = 0
-    if (actualBalance !== null) {
-      diff = actualBalance - calculatedBalance
-      // 若有實際餘額，下個月的推算基準改為實際餘額
-      runningBalance = actualBalance
-    } else {
-      // 若無實際餘額，下個月基準為本月推算餘額
-      runningBalance = calculatedBalance
+    // 本月月末推算結餘 (若有輸入月初結餘就用輸入的算，否則用上個月月末算)
+    const baseStart = actualStart !== null ? actualStart : lastCalculatedEnd
+    const calculatedEnd = baseStart + mInc - totalExpense
+    
+    // 下個月月初結餘 (用於對比)
+    const nextMonth = sortedMonths[i + 1]
+    let nextActualStart = null
+    if (nextMonth) {
+      const nextRecord = rawBalances.value.find(b => b.year_month === nextMonth)
+      if (nextRecord) nextActualStart = Number(nextRecord.actual_balance)
+    }
+    
+    // 差異 (下個月輸入的月初 - 本月推算的月末)
+    let diff = null
+    if (nextActualStart !== null) {
+      diff = nextActualStart - calculatedEnd
     }
     
     result.push({
       month,
       income: mInc,
       expense: totalExpense,
-      calculated: calculatedBalance,
-      actual: actualBalance,
+      actualStart,
+      calculatedEnd,
       diff
     })
-  })
+    
+    lastCalculatedEnd = calculatedEnd
+  }
   
   // 返回倒序（最新的月份在最上面）
   return result.reverse()
 })
 
-// 儲存每月實際結餘
-const saveMonthlyBalance = async (month, val) => {
-  if (val === null || val === undefined) return
+const openReconcileDialog = (month = '') => {
+  const defaultMonth = month || new Date().toISOString().slice(0, 7)
+  const existing = rawBalances.value.find(b => b.year_month === defaultMonth)
+  
+  reconcileForm.value = {
+    year_month: defaultMonth,
+    actual_balance: existing ? Number(existing.actual_balance) : 0
+  }
+  reconcileDialogVisible.value = true
+}
+
+const onReconcileMonthChange = (val) => {
+  if (!val) return
+  const existing = rawBalances.value.find(b => b.year_month === val)
+  reconcileForm.value.actual_balance = existing ? Number(existing.actual_balance) : 0
+}
+
+const submitReconcile = async () => {
+  if (!reconcileForm.value.year_month) return ElMessage.warning('請選擇月份')
+  if (reconcileForm.value.actual_balance === null) return ElMessage.warning('請輸入金額')
+  
+  submittingReconcile.value = true
   try {
     const familyId = '00000000-0000-0000-0000-000000000001'
     const { error } = await supabase.from('monthly_balances').upsert({
       family_id: familyId,
-      year_month: month,
-      actual_balance: val
+      year_month: reconcileForm.value.year_month,
+      actual_balance: reconcileForm.value.actual_balance
     }, { onConflict: 'family_id, year_month' })
     
     if (error) throw error
-    ElMessage.success(`✅ ${month} 對帳結餘已更新`)
-    fetchData() // 重新計算
+    ElMessage.success(`✅ ${reconcileForm.value.year_month} 月初結餘已更新`)
+    reconcileDialogVisible.value = false
+    fetchData()
   } catch (err) {
     ElMessage.error('儲存失敗：' + err.message)
+  } finally {
+    submittingReconcile.value = false
   }
 }
 
@@ -515,7 +563,7 @@ const fetchData = async () => {
       supabase.from('insurance_policies').select('*'),
       supabase.from('members').select('*').order('created_at', { ascending: true }),
       supabase.from('expense_categories').select('*').order('created_at', { ascending: true }),
-      supabase.from('monthly_balances').select('*') // 🆕
+      supabase.from('monthly_balances').select('*')
     ])
 
     if (incRes.data) rawIncomes.value = incRes.data
@@ -524,7 +572,7 @@ const fetchData = async () => {
     if (polRes.data) policies.value = polRes.data
     if (mRes.data) members.value = mRes.data
     if (cRes.data) categories.value = cRes.data
-    if (balRes.data) rawBalances.value = balRes.data // 🆕
+    if (balRes.data) rawBalances.value = balRes.data
   } catch (error) {
     ElMessage.error('載入資料失敗')
   } finally {
@@ -750,24 +798,24 @@ onMounted(() => fetchData())
 
 .text-green { color: #10b981; }
 .text-red { color: #ef4444; }
+.text-blue { color: #3b82f6; }
 .text-muted { color: #94a3b8; }
 .font-bold { font-weight: 600; }
 
 /* 對帳頁面專用 */
-.reconcile-hint { background: #EEF2FF; color: #6366F1; padding: 12px 16px; border-radius: 10px; font-size: 14px; margin-bottom: 20px; }
-.input-wrapper { display: flex; align-items: center; }
+.reconcile-hint { background: #EEF2FF; color: #6366F1; padding: 12px 16px; border-radius: 10px; font-size: 14px; }
 .font-monospace { font-family: monospace; }
-.ml-2 { margin-left: 8px; }
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
   .header-actions { width: 100%; justify-content: space-between; }
   .header-actions .el-button { flex: 1; }
+  .tool-bar { flex-direction: column; align-items: stretch; gap: 10px; }
 }
 </style>
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1793979000
+V: 1793984000
 W: ai-wa-fs-002
 ═══ -->
