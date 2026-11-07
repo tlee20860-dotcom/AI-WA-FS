@@ -5,6 +5,7 @@
       <div class="header-actions">
         <el-button type="primary" @click="openAddDialog('expense')">+ 新增支出</el-button>
         <el-button type="success" @click="openAddDialog('income')">+ 新增收入</el-button>
+        <el-button type="warning" plain @click="openReconcileDialog()">+ 輸入月初結餘</el-button>
       </div>
     </div>
 
@@ -187,11 +188,8 @@
         <!-- 5. 每月對帳 -->
         <el-tab-pane label="每月對帳" name="reconcile">
           <div class="tab-content">
-            <div class="tool-bar" style="justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
-              <div class="reconcile-hint" style="flex: 1; min-width: 250px; margin-bottom: 10px;">
-                請輸入每個月的「月初真實銀行結餘」。系統會自動推算該月月末結餘，並與下個月的月初結餘進行對比。
-              </div>
-              <el-button type="primary" @click="openReconcileDialog()">+ 輸入月初結餘</el-button>
+            <div class="reconcile-hint" style="margin-bottom: 20px;">
+              請輸入每個月的「月初真實銀行結餘」。系統會自動推算該月月末結餘，並與下個月的月初結餘進行對比。
             </div>
             
             <div class="table-wrapper">
@@ -448,16 +446,14 @@ const groupByMonth = (items) => {
 const pendingGroups = computed(() => groupByMonth(allPendingItems.value).sort((a, b) => a.month.localeCompare(b.month)))
 const processedGroups = computed(() => groupByMonth(allProcessedItems.value))
 
-// 🆕 計算對帳資料 (月初餘額推算月末)
+// 計算對帳資料 (月初餘額推算月末)
 const reconcileData = computed(() => {
-  // 收集所有發生過帳目的月份
   const monthSet = new Set()
   rawIncomes.value.forEach(i => monthSet.add(i.year_month))
   rawExpenses.value.forEach(e => monthSet.add(e.year_month))
   rawInsurancePayments.value.forEach(ip => monthSet.add(ip.year_month))
   rawBalances.value.forEach(b => monthSet.add(b.year_month))
   
-  // 由舊到新排序
   const sortedMonths = Array.from(monthSet).filter(Boolean).sort()
   
   const result = []
@@ -466,7 +462,6 @@ const reconcileData = computed(() => {
   for (let i = 0; i < sortedMonths.length; i++) {
     const month = sortedMonths[i]
     
-    // 本月收支
     const mInc = rawIncomes.value.filter(x => x.year_month === month).reduce((sum, x) => sum + Number(x.amount), 0)
     const mExp = rawExpenses.value.filter(x => x.year_month === month && x.status === '已處理').reduce((sum, x) => sum + Number(x.amount), 0)
     const policyMap = {}
@@ -474,15 +469,12 @@ const reconcileData = computed(() => {
     const mIns = rawInsurancePayments.value.filter(x => x.year_month === month && x.status === '已轉').reduce((sum, x) => sum + (policyMap[x.policy_id] || 0), 0)
     const totalExpense = mExp + mIns
     
-    // 本月月初結餘
     const balanceRecord = rawBalances.value.find(b => b.year_month === month)
     const actualStart = balanceRecord ? Number(balanceRecord.actual_balance) : null
     
-    // 本月月末推算結餘 (若有輸入月初結餘就用輸入的算，否則用上個月月末算)
     const baseStart = actualStart !== null ? actualStart : lastCalculatedEnd
     const calculatedEnd = baseStart + mInc - totalExpense
     
-    // 下個月月初結餘 (用於對比)
     const nextMonth = sortedMonths[i + 1]
     let nextActualStart = null
     if (nextMonth) {
@@ -490,7 +482,6 @@ const reconcileData = computed(() => {
       if (nextRecord) nextActualStart = Number(nextRecord.actual_balance)
     }
     
-    // 差異 (下個月輸入的月初 - 本月推算的月末)
     let diff = null
     if (nextActualStart !== null) {
       diff = nextActualStart - calculatedEnd
@@ -508,7 +499,6 @@ const reconcileData = computed(() => {
     lastCalculatedEnd = calculatedEnd
   }
   
-  // 返回倒序（最新的月份在最上面）
   return result.reverse()
 })
 
@@ -770,7 +760,7 @@ onMounted(() => fetchData())
 .settlement-container { width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
 .page-header h2 { margin: 0; color: #1e293b; font-size: 24px; font-weight: 700; }
-.header-actions { display: flex; gap: 10px; }
+.header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .main-card { border-radius: 20px; border: none; overflow: hidden; }
 .tab-content { padding-top: 10px; }
@@ -809,13 +799,13 @@ onMounted(() => fetchData())
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
   .header-actions { width: 100%; justify-content: space-between; }
-  .header-actions .el-button { flex: 1; }
-  .tool-bar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .header-actions .el-button { flex: 1; margin-left: 0 !important; }
+  .header-actions .el-button + .el-button { margin-left: 8px !important; }
 }
 </style>
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1793984000
+V: 1793986000
 W: ai-wa-fs-002
 ═══ -->
