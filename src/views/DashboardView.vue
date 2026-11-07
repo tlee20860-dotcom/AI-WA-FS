@@ -16,8 +16,10 @@
           </div>
           <div class="card-content">
             <div class="asset-label">家庭總餘額</div>
-            <div class="asset-value">HK$ {{ totalBalance.toLocaleString() }}</div>
-            <div class="asset-sub">目前顯示最新結餘</div>
+            <div class="asset-value" :class="totalBalance < 0 ? 'text-red' : ''">
+              HK$ {{ totalBalance.toLocaleString() }}
+            </div>
+            <div class="asset-sub">歷史累計推算（總收入 - 已處理支出）</div>
           </div>
         </el-card>
       </el-col>
@@ -126,17 +128,7 @@ const fetchDashboardData = async () => {
   loading.value = true
   
   try {
-    // 1. 抓取最新總餘額
-    const { data: balData } = await supabase
-      .from('monthly_balances')
-      .select('actual_balance')
-      .order('year_month', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    
-    if (balData) totalBalance.value = Number(balData.actual_balance)
-
-    // 2. 抓取所有收支紀錄 (用於計算年度)
+    // 抓取所有收支紀錄與保單
     const [incRes, expRes, insRes, polRes] = await Promise.all([
       supabase.from('incomes').select('year_month, amount'),
       supabase.from('expenses').select('year_month, amount').eq('status', '已處理'),
@@ -152,43 +144,40 @@ const fetchDashboardData = async () => {
       polRes.data.forEach(p => { policyMap[p.id] = Number(p.monthly_average) })
     }
 
-    // 3. 初始化前後 2 年的資料結構
+    // 初始化前後 2 年的資料結構
     const tempYears = {}
     for (let i = -2; i <= 2; i++) {
       const y = currentYear + i
       tempYears[y] = { year: y, income: 0, expense: 0, net: 0 }
     }
 
-    // 4. 計算收入
+    // 用於計算歷史總餘額的變數
+    let allTimeIncome = 0
+    let allTimeExpense = 0
+
+    // 1. 計算收入 (同時累加歷史總收入)
     if (incRes.data) {
       incRes.data.forEach(item => {
         if (!item.year_month) return
+        const amount = Number(item.amount)
+        allTimeIncome += amount
+        
         const y = parseInt(item.year_month.split('-')[0])
         if (tempYears[y]) {
-          tempYears[y].income += Number(item.amount)
+          tempYears[y].income += amount
         }
       })
     }
 
-    // 5. 計算一般支出 (已處理)
+    // 2. 計算一般支出 (已處理) (同時累加歷史總支出)
     const monthsWithData = new Set()
     if (expRes.data) {
       expRes.data.forEach(item => {
         if (!item.year_month) return
+        const amount = Number(item.amount)
+        allTimeExpense += amount
+        
         const y = parseInt(item.year_month.split('-')[0])
-        if (tempYears[y]) {
-          tempYears[y].expense += Number(item.amount)
-          if (y === currentYear) monthsWithData.add(item.year_month)
-        }
-      })
-    }
-
-    // 6. 計算保險支出 (已轉)
-    if (insRes.data) {
-      insRes.data.forEach(item => {
-        if (!item.year_month) return
-        const y = parseInt(item.year_month.split('-')[0])
-        const amount = policyMap[item.policy_id] || 0
         if (tempYears[y]) {
           tempYears[y].expense += amount
           if (y === currentYear) monthsWithData.add(item.year_month)
@@ -196,7 +185,25 @@ const fetchDashboardData = async () => {
       })
     }
 
-    // 7. 計算淨額並轉為陣列
+    // 3. 計算保險支出 (已轉) (同時累加歷史總支出)
+    if (insRes.data) {
+      insRes.data.forEach(item => {
+        if (!item.year_month) return
+        const amount = policyMap[item.policy_id] || 0
+        allTimeExpense += amount
+        
+        const y = parseInt(item.year_month.split('-')[0])
+        if (tempYears[y]) {
+          tempYears[y].expense += amount
+          if (y === currentYear) monthsWithData.add(item.year_month)
+        }
+      })
+    }
+
+    // 4. 計算歷史總餘額
+    totalBalance.value = allTimeIncome - allTimeExpense
+
+    // 5. 計算年度淨額並轉為陣列
     const resultArray = []
     for (let i = -2; i <= 2; i++) {
       const y = currentYear + i
@@ -252,6 +259,7 @@ onMounted(() => {
 .card-content { flex: 1; }
 .asset-label { font-size: 15px; color: #94a3b8; margin-bottom: 8px; }
 .asset-value { font-size: 36px; font-weight: bold; font-family: monospace; margin-bottom: 6px; }
+.asset-value.text-red { color: #f87171; } /* 如果透支顯示紅色 */
 .asset-sub { font-size: 13px; color: #64748b; }
 
 /* 統計卡片 */
@@ -292,6 +300,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/DashboardView.vue
-V: 1793973000
+V: 1793973100
 W: ai-wa-fs-002
 ═══ -->
