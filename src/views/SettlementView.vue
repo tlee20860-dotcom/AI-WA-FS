@@ -283,6 +283,19 @@ const dialogTitle = computed(() => {
   return isEdit.value ? `編輯${typeName}` : `新增${typeName}`
 })
 
+// 🆕 計算期數
+const getPeriodNumber = (startDateStr, targetYearMonth) => {
+  if (!startDateStr || !targetYearMonth) return ''
+  const start = new Date(startDateStr)
+  const startY = start.getFullYear()
+  const startM = start.getMonth() + 1
+  
+  const [targetY, targetM] = targetYearMonth.split('-').map(Number)
+  
+  const diffMonths = (targetY - startY) * 12 + (targetM - startM) + 1
+  return diffMonths > 0 ? diffMonths : 1
+}
+
 // 轉換為統一的待辦格式
 const allPendingItems = computed(() => {
   const items = []
@@ -302,9 +315,10 @@ const allPendingItems = computed(() => {
     if (ip.status !== '已轉') {
       const p = policyMap[ip.policy_id]
       if (p) {
+        const period = getPeriodNumber(p.start_date, ip.year_month)
         items.push({
           id: `ins_${ip.id}`, realId: ip.id, type: 'insurance',
-          year_month: ip.year_month, name: `保險供款：${p.name}`, payer: p.holder_name || '家庭共用',
+          year_month: ip.year_month, name: `保險供款：${p.name} (第 ${period} 期)`, payer: p.holder_name || '家庭共用',
           category: '保險', amount: Number(p.monthly_average), created_at: ip.created_at
         })
       }
@@ -332,9 +346,10 @@ const allProcessedItems = computed(() => {
     if (ip.status === '已轉') {
       const p = policyMap[ip.policy_id]
       if (p) {
+        const period = getPeriodNumber(p.start_date, ip.year_month)
         items.push({
           id: `ins_${ip.id}`, realId: ip.id, type: 'insurance',
-          year_month: ip.year_month, name: `保險供款：${p.name}`, payer: p.holder_name || '家庭共用',
+          year_month: ip.year_month, name: `保險供款：${p.name} (第 ${period} 期)`, payer: p.holder_name || '家庭共用',
           amount: Number(p.monthly_average)
         })
       }
@@ -613,6 +628,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1793972600
+V: 1793975000
 W: ai-wa-fs-002
 ═══ -->
