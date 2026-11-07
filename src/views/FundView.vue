@@ -131,8 +131,8 @@
             <el-option v-for="f in funds" :key="f.id" :label="f.name" :value="f.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="月份" required>
-          <el-date-picker v-model="snapshotForm.year_month" type="month" value-format="YYYY-MM" style="width: 100%" />
+        <el-form-item label="日期" required>
+          <el-date-picker v-model="snapshotForm.year_month" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         
         <el-row :gutter="10">
@@ -182,7 +182,7 @@
     <el-dialog v-model="historyDialogVisible" :title="`歷史快照 - ${currentFund?.name}`" width="90%" max-width="600px">
       <div class="table-wrapper">
         <el-table :data="currentFundSnaps" style="width: 100%; min-width: 500px;" stripe>
-          <el-table-column prop="year_month" label="月份" width="100" />
+          <el-table-column prop="year_month" label="日期" width="120" />
           <el-table-column prop="units" label="單位數" width="100" align="right" />
           <el-table-column prop="nav" label="價格 (USD)" width="100" align="right" />
           <el-table-column prop="exchange_rate" label="匯率" width="80" align="right" />
@@ -225,7 +225,7 @@ const historyDialogVisible = ref(false)
 const isEditFund = ref(false)
 const isLinkedToPolicy = ref(false)
 const fundForm = ref({ id: null, name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 })
-const snapshotForm = ref({ fund_id: '', year_month: new Date().toISOString().slice(0, 7), units: 0, nav: 0, exchange_rate: 7.8 })
+const snapshotForm = ref({ fund_id: '', year_month: new Date().toISOString().slice(0, 10), units: 0, nav: 0, exchange_rate: 7.8 })
 
 // 提款狀態
 const currentFund = ref(null)
@@ -270,6 +270,7 @@ const totalPnl = computed(() => totalValue.value - totalCost.value)
 const getLatestSnapshot = (fund) => {
   const fSnaps = snapshots.value.filter(s => s.fund_id === fund.id)
   if (fSnaps.length === 0) return null
+  // 因為現在是 YYYY-MM-DD，字串比較依然適用
   return fSnaps.sort((a, b) => b.year_month.localeCompare(a.year_month))[0]
 }
 
@@ -344,7 +345,6 @@ const submitWithdraw = async () => {
 
 const openFundDialog = (fund = null) => {
   if (fund) {
-    // 編輯模式
     isEditFund.value = true
     isLinkedToPolicy.value = !!fund.policy_id
     fundForm.value = {
@@ -355,7 +355,6 @@ const openFundDialog = (fund = null) => {
       manual_cost: Number(fund.manual_cost) || 0
     }
   } else {
-    // 新增模式
     isEditFund.value = false
     isLinkedToPolicy.value = false
     fundForm.value = { id: null, name: '', policy_id: '', allocation_pct: 0, manual_cost: 0 }
@@ -386,11 +385,9 @@ const submitFund = async () => {
   
   let error
   if (isEditFund.value) {
-    // 更新
     const res = await supabase.from('funds').update(payload).eq('id', fundForm.value.id)
     error = res.error
   } else {
-    // 新增
     const res = await supabase.from('funds').insert([{
       ...payload,
       family_id: '00000000-0000-0000-0000-000000000001'
@@ -413,7 +410,7 @@ const openSnapshotDialog = () => {
   if (funds.value.length === 0) return ElMessage.warning('請先新增基金主檔')
   snapshotForm.value = {
     fund_id: funds.value[0].id,
-    year_month: new Date().toISOString().slice(0, 7),
+    year_month: new Date().toISOString().slice(0, 10),
     units: 0, nav: 0, exchange_rate: 7.8
   }
   snapshotDialogVisible.value = true
@@ -502,6 +499,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/FundView.vue
-V: 1793973400
+V: 1793990000
 W: ai-wa-fs-002
 ═══ -->
