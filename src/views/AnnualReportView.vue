@@ -112,7 +112,7 @@ import { saveAs } from 'file-saver'
 const currentYear = new Date().getFullYear().toString()
 const selectedYear = ref(currentYear)
 const viewMode = ref('year') // 'year' | 'month'
-const selectedMonth = ref(String(new Date().getMonth() + 1).padStart(2, '0')) // 01~12
+const selectedMonth = ref(String(new Date().getMonth() + 1).padStart(2, '0'))
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -121,14 +121,13 @@ const monthlyData = ref([])
 const rawIncomes = ref([])
 const rawExpenses = ref([])
 const rawInsurancePayments = ref([])
-const rawBalances = ref([]) // 🆕 紀錄對帳
+const rawBalances = ref([])
 const policies = ref([])
 
 const viewTitle = computed(() => {
   return viewMode.value === 'year' ? `年度` : `${parseInt(selectedMonth.value)} 月`
 })
 
-// 統計加總
 const totalIncome = computed(() => monthlyData.value.reduce((sum, item) => sum + item.income, 0))
 const totalExpense = computed(() => monthlyData.value.reduce((sum, item) => sum + item.expense, 0))
 const totalInsurance = computed(() => monthlyData.value.reduce((sum, item) => sum + item.insurance, 0))
@@ -138,12 +137,10 @@ const fetchData = async () => {
   loading.value = true
   
   try {
-    // 構建查詢前綴
     const prefix = viewMode.value === 'year' 
       ? `${selectedYear.value}-%` 
       : `${selectedYear.value}-${selectedMonth.value}%`
 
-    // 平行抓取：收入、支出(已處理)、保險(已轉)、保單主檔、每月對帳
     const [incRes, expRes, insRes, polRes, balRes] = await Promise.all([
       supabase.from('incomes').select('*').like('year_month', prefix),
       supabase.from('expenses').select('*').like('year_month', prefix).eq('status', '已處理'),
@@ -165,7 +162,6 @@ const fetchData = async () => {
     const policyMap = {}
     policies.value.forEach(p => { policyMap[p.id] = Number(p.monthly_average) })
 
-    // 初始化資料結構
     let tempData = []
     if (viewMode.value === 'year') {
       tempData = Array.from({ length: 12 }, (_, i) => ({
@@ -176,7 +172,6 @@ const fetchData = async () => {
       tempData = [{ month: m, income: 0, expense: 0, insurance: 0, balance: 0, actualBalance: null }]
     }
 
-    // 填入資料
     const getMonthIndex = (ym) => {
       const m = parseInt(ym.split('-')[1])
       return viewMode.value === 'year' ? m - 1 : 0
@@ -198,13 +193,11 @@ const fetchData = async () => {
       if (tempData[idx]) tempData[idx].insurance += amount
     })
 
-    // 填入實際結餘
     rawBalances.value.forEach(item => {
       const idx = getMonthIndex(item.year_month)
       if (tempData[idx]) tempData[idx].actualBalance = Number(item.actual_balance)
     })
 
-    // 計算結餘
     tempData.forEach(item => {
       item.balance = item.income - item.expense - item.insurance
     })
@@ -218,7 +211,6 @@ const fetchData = async () => {
   }
 }
 
-// 表格底部加總列
 const getSummaries = (param) => {
   const { columns } = param
   const sums = []
@@ -236,33 +228,40 @@ const getSummaries = (param) => {
   return sums
 }
 
-// 匯出 Excel
+// 🆕 重寫 Excel 匯出：13 個分頁
 const exportExcel = async () => {
   if (monthlyData.value.length === 0) return ElMessage.warning('無資料可匯出')
   exporting.value = true
 
   try {
     const workbook = new ExcelJS.Workbook()
-
-    // ==========================================
-    // 分頁一：收支明細 (按對象分組)
-    // ==========================================
     const policyMap = {}
     policies.value.forEach(p => { policyMap[p.id] = p })
 
+    // 收集所有明細資料，並補齊標準欄位
     const allItems = []
 
     rawIncomes.value.forEach(i => {
       allItems.push({
-        year_month: i.year_month, type: '收入', payer: i.member_name || '未指定',
-        name: i.name, category: '收入', amount: Number(i.amount), status: '已入帳'
+        year_month: i.year_month,
+        type: '收入',
+        payer: i.member_name || '未指定',
+        name: i.name,
+        category: '收入',
+        amount: Number(i.amount),
+        status: '已入帳'
       })
     })
 
     rawExpenses.value.forEach(e => {
       allItems.push({
-        year_month: e.year_month, type: '支出', payer: e.payer_name || '未指定',
-        name: e.name, category: e.category_name || '未分類', amount: Number(e.amount), status: e.status
+        year_month: e.year_month,
+        type: '支出',
+        payer: e.payer_name || '未指定',
+        name: e.name,
+        category: e.category_name || '未分類',
+        amount: Number(e.amount),
+        status: e.status
       })
     })
 
@@ -270,125 +269,108 @@ const exportExcel = async () => {
       const p = policyMap[ip.policy_id]
       if (p) {
         allItems.push({
-          year_month: ip.year_month, type: '保險', payer: p.holder_name || '家庭共用',
-          name: `保險供款：${p.name}`, category: '保險', amount: Number(p.monthly_average), status: '已轉'
+          year_month: ip.year_month,
+          type: '保險',
+          payer: p.holder_name || '家庭共用',
+          name: `保險供款：${p.name}`,
+          category: '保險',
+          amount: Number(p.monthly_average),
+          status: '已轉'
         })
       }
     })
 
-    const wsDetail = workbook.addWorksheet('收支明細')
-    wsDetail.columns = [
-      { header: '月份', key: 'year_month', width: 12 },
-      { header: '類型', key: 'type', width: 10 },
-      { header: '對象', key: 'payer', width: 15 },
-      { header: '項目名稱', key: 'name', width: 30 },
-      { header: '類別', key: 'category', width: 15 },
-      { header: '金額', key: 'amount', width: 15, style: { numFmt: '#,##0.00' } },
-      { header: '狀態', key: 'status', width: 12 }
-    ]
+    // 輔助函式：生成單一工作表
+    const buildWorksheet = (ws, items, title) => {
+      ws.columns = [
+        { header: '月份', key: 'year_month', width: 12 },
+        { header: '類型', key: 'type', width: 10 },
+        { header: '對象', key: 'payer', width: 15 },
+        { header: '項目名稱', key: 'name', width: 30 },
+        { header: '類別', key: 'category', width: 15 },
+        { header: '金額', key: 'amount', width: 15, style: { numFmt: '#,##0.00' } },
+        { header: '狀態', key: 'status', width: 12 }
+      ]
 
-    // 表頭樣式
-    const headerRow = wsDetail.getRow(1)
-    headerRow.font = { bold: true }
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } }
+      const headerRow = ws.getRow(1)
+      headerRow.font = { bold: true }
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } }
 
-    const grouped = {}
-    allItems.forEach(item => {
-      if (!grouped[item.payer]) grouped[item.payer] = []
-      grouped[item.payer].push(item)
-    })
+      if (items.length === 0) {
+        ws.addRow({ year_month: '本月無收支紀錄', type: '', payer: '', name: '', category: '', amount: '', status: '' })
+        ws.mergeCells('A2:G2')
+        ws.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' }
+        ws.getCell('A2').font = { color: { argb: 'FF999999' }, italic: true }
+        return
+      }
 
-    let currentRow = 2
-    let grandTotal = 0
-
-    for (const [payer, items] of Object.entries(grouped)) {
-      let subtotal = 0
+      const grouped = {}
       items.forEach(item => {
-        const row = wsDetail.addRow(item)
-        row.getCell('amount').alignment = { horizontal: 'right' }
-        subtotal += item.amount
-        currentRow++
+        if (!grouped[item.payer]) grouped[item.payer] = []
+        grouped[item.payer].push(item)
       })
-      grandTotal += subtotal
 
-      const subtotalRow = wsDetail.addRow({
-        year_month: '', type: '', payer: '', name: `${payer} 小計`, category: '', amount: subtotal, status: ''
+      let currentRow = 2
+      let grandTotal = 0
+
+      for (const [payer, groupItems] of Object.entries(grouped)) {
+        let subtotal = 0
+        groupItems.forEach(item => {
+          const row = ws.addRow(item)
+          row.getCell('amount').alignment = { horizontal: 'right' }
+          subtotal += item.amount
+          currentRow++
+        })
+        grandTotal += subtotal
+
+        const subtotalRow = ws.addRow({
+          year_month: '', type: '', payer: '', name: `${payer} 小計`, category: '', amount: subtotal, status: ''
+        })
+        ws.mergeCells(`A${currentRow}:D${currentRow}`)
+        subtotalRow.getCell(4).alignment = { horizontal: 'right' }
+        subtotalRow.getCell(6).alignment = { horizontal: 'right' }
+        subtotalRow.font = { bold: true }
+        subtotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }
+        currentRow++
+      }
+
+      const totalRow = ws.addRow({
+        year_month: '', type: '', payer: '', name: `${title}總計`, category: '', amount: grandTotal, status: ''
       })
-      wsDetail.mergeCells(`A${currentRow}:D${currentRow}`)
-      subtotalRow.getCell(4).alignment = { horizontal: 'right' }
-      subtotalRow.getCell(6).alignment = { horizontal: 'right' }
-      subtotalRow.font = { bold: true }
-      subtotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }
-      currentRow++
+      ws.mergeCells(`A${currentRow}:D${currentRow}`)
+      totalRow.getCell(4).alignment = { horizontal: 'right' }
+      totalRow.getCell(6).alignment = { horizontal: 'right' }
+      totalRow.font = { bold: true, color: { argb: 'FF6366F1' } }
+      totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } }
+
+      ws.eachRow((row) => {
+        row.eachCell((cell) => {
+          cell.border = { top: { style: 'thin', color: { argb: 'FFDDDDDD' } }, left: { style: 'thin', color: { argb: 'FFDDDDDD' } }, bottom: { style: 'thin', color: { argb: 'FFDDDDDD' } }, right: { style: 'thin', color: { argb: 'FFDDDDDD' } } }
+        })
+      })
     }
 
-    const totalRow = wsDetail.addRow({
-      year_month: '', type: '', payer: '', name: `${viewTitle.value}總計`, category: '', amount: grandTotal, status: ''
-    })
-    wsDetail.mergeCells(`A${currentRow}:D${currentRow}`)
-    totalRow.getCell(4).alignment = { horizontal: 'right' }
-    totalRow.getCell(6).alignment = { horizontal: 'right' }
-    totalRow.font = { bold: true, color: { argb: 'FF6366F1' } }
-    totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } }
+    // 1. 生成「整年」分頁
+    const wsYear = workbook.addWorksheet('整年')
+    buildWorksheet(wsYear, allItems, '整年')
 
-    // 全局邊框
-    wsDetail.eachRow((row) => {
-      row.eachCell((cell) => {
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-      })
-    })
-
-    // ==========================================
-    // 分頁二：月度總結 (包含實際結餘)
-    // ==========================================
-    const wsSummary = workbook.addWorksheet('月度總結')
-    wsSummary.columns = [
-      { header: '月份', key: 'month', width: 12 },
-      { header: '總收入', key: 'income', width: 15, style: { numFmt: '#,##0.00' } },
-      { header: '總支出', key: 'expense', width: 15, style: { numFmt: '#,##0.00' } },
-      { header: '淨收支', key: 'net', width: 15, style: { numFmt: '#,##0.00' } },
-      { header: '實際銀行結餘', key: 'actual', width: 18, style: { numFmt: '#,##0.00' } }
-    ]
-
-    const summaryHeader = wsSummary.getRow(1)
-    summaryHeader.font = { bold: true }
-    summaryHeader.alignment = { vertical: 'middle', horizontal: 'center' }
-    summaryHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } }
-
-    monthlyData.value.forEach(item => {
-      // 只有在該月有收支或有結餘紀錄時才寫入
-      if (item.income === 0 && item.expense === 0 && item.insurance === 0 && item.actualBalance === null) return
-
-      const totalExp = item.expense + item.insurance
-      const net = item.income - totalExp
-
-      const row = wsSummary.addRow({
-        month: `${selectedYear.value}-${String(item.month).padStart(2, '0')}`,
-        income: item.income,
-        expense: totalExp,
-        net: net,
-        actual: item.actualBalance !== null ? item.actualBalance : ''
-      })
-      row.getCell('income').alignment = { horizontal: 'right' }
-      row.getCell('expense').alignment = { horizontal: 'right' }
-      row.getCell('net').alignment = { horizontal: 'right' }
-      row.getCell('actual').alignment = { horizontal: 'right' }
-    })
-
-    // 全局邊框
-    wsSummary.eachRow((row) => {
-      row.eachCell((cell) => {
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }
-      })
-    })
+    // 2. 生成「1月」到「12月」分頁
+    for (let m = 1; m <= 12; m++) {
+      const monthStr = String(m).padStart(2, '0')
+      const targetYM = `${selectedYear.value}-${monthStr}`
+      const monthItems = allItems.filter(item => item.year_month === targetYM)
+      
+      const wsMonth = workbook.addWorksheet(`${m}月`)
+      buildWorksheet(wsMonth, monthItems, `${m}月`)
+    }
 
     // 導出檔案
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    saveAs(blob, `收支報表_${viewTitle.value}.xlsx`)
+    saveAs(blob, `收支明細_${selectedYear.value}.xlsx`)
 
-    ElMessage.success('✅ 報表匯出成功（含明細與月度總結）')
+    ElMessage.success('✅ 報表匯出成功（包含整年與 12 個月分頁）')
   } catch (err) {
     console.error(err)
     ElMessage.error('匯出失敗：' + err.message)
@@ -437,6 +419,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/AnnualReportView.vue
-V: 1793981000
+V: 1793982000
 W: ai-wa-fs-002
 ═══ -->
