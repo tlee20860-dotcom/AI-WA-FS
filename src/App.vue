@@ -33,15 +33,15 @@
       >
         <el-menu-item index="/">
           <el-icon><HomeFilled /></el-icon>
-          <template #title>總覽儀表板</template>
+          <template #title>年度總覽</template>
         </el-menu-item>
         <el-menu-item index="/cashflow">
           <el-icon><Money /></el-icon>
-          <template #title>收支流水</template>
+          <template #title>月度總覽</template>
         </el-menu-item>
         <el-menu-item index="/settlement">
           <el-icon><Tickets /></el-icon>
-          <template #title>待辦中心</template>
+          <template #title>待辦與紀錄中心</template>
         </el-menu-item>
         <el-menu-item index="/insurance">
           <el-icon><Umbrella /></el-icon>
@@ -242,6 +242,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793971100
+V: 1793972400
 W: ai-wa-fs-002
 ═══ -->
