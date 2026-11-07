@@ -19,14 +19,10 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
+            src: '/1000125065.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       }
@@ -45,6 +41,6 @@ export default defineConfig({
 
 /* ═══ EOF ═══
 F: AI-WA-FS/vite.config.js
-V: 1793810200
-W: ai-wa-fs-001
+V: 1793973200
+W: ai-wa-fs-002
 ═══ */
