@@ -21,6 +21,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/member-report',
+    name: 'MemberReport',
+    component: () => import('@/views/MemberReportView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/settlement',
     name: 'Settlement',
     component: () => import('@/views/SettlementView.vue'),
@@ -70,6 +76,6 @@ export default router
 
 /* ═══ EOF ═══
 F: AI-WA-FS/src/router/index.js
-V: 1793810700
-W: ai-wa-fs-001
+V: 1793974100
+W: ai-wa-fs-002
 ═══ */
