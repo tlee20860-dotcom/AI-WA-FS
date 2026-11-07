@@ -19,7 +19,7 @@
       <el-card shadow="never" class="stat-card income-card">
         <div class="stat-icon"><el-icon><TrendCharts /></el-icon></div>
         <div class="stat-info">
-          <div class="stat-label">本月總收入</div>
+          <div class="stat-label">{{ currentMonthLabel }}總收入</div>
           <div class="stat-value text-green">HK$ {{ totalIncome.toLocaleString() }}</div>
         </div>
       </el-card>
@@ -28,7 +28,7 @@
       <el-card shadow="never" class="stat-card expense-card">
         <div class="stat-icon"><el-icon><Bottom /></el-icon></div>
         <div class="stat-info">
-          <div class="stat-label">普通支出</div>
+          <div class="stat-label">{{ currentMonthLabel }}普通支出</div>
           <div class="stat-value text-red">HK$ {{ processedExpense.toLocaleString() }}</div>
           <div class="stat-sub">
             待處理：<span class="text-orange">HK$ {{ pendingExpense.toLocaleString() }}</span>
@@ -40,7 +40,7 @@
       <el-card shadow="never" class="stat-card insurance-card">
         <div class="stat-icon"><el-icon><Umbrella /></el-icon></div>
         <div class="stat-info">
-          <div class="stat-label">保險供款</div>
+          <div class="stat-label">{{ currentMonthLabel }}保險供款</div>
           <div class="stat-value text-orange">HK$ {{ processedInsurance.toLocaleString() }}</div>
           <div class="stat-sub">
             待轉帳：<span class="text-muted">HK$ {{ pendingInsurance.toLocaleString() }}</span>
@@ -52,7 +52,7 @@
       <el-card shadow="never" class="stat-card total-card">
         <div class="stat-icon"><el-icon><Wallet /></el-icon></div>
         <div class="stat-info">
-          <div class="stat-label">本月實際總支出</div>
+          <div class="stat-label">{{ currentMonthLabel }}實際總支出</div>
           <div class="stat-value text-primary">HK$ {{ totalProcessed.toLocaleString() }}</div>
           <div class="stat-sub">
             (普通支出 + 保險供款)
@@ -71,6 +71,13 @@ import { TrendCharts, Bottom, Wallet, Umbrella } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const selectedMonth = ref(new Date().toISOString().slice(0, 7))
+
+// 動態月份標籤
+const currentMonthLabel = computed(() => {
+  if (!selectedMonth.value) return ''
+  const [year, month] = selectedMonth.value.split('-')
+  return `${year} 年 ${parseInt(month)} 月`
+})
 
 // 數據狀態
 const totalIncome = ref(0)
@@ -212,6 +219,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793980000
+V: 1793988000
 W: ai-wa-fs-002
 ═══ -->
