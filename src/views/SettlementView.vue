@@ -183,6 +183,64 @@
             </div>
           </div>
         </el-tab-pane>
+
+        <!-- 5. 每月對帳 (🆕) -->
+        <el-tab-pane label="每月對帳" name="reconcile">
+          <div class="tab-content">
+            <div class="reconcile-hint">
+              以下表格會自動推算每月應有結餘。請在「實際銀行結餘」欄位輸入您對帳後的數字，系統將以此為基準推算後續月份。
+            </div>
+            
+            <div class="table-wrapper">
+              <el-table :data="reconcileData" style="width: 100%; min-width: 700px;" stripe>
+                <el-table-column prop="month" label="月份" width="120" />
+                <el-table-column prop="income" label="總收入" width="120" align="right">
+                  <template #default="scope">
+                    <span class="text-green">HK$ {{ scope.row.income.toLocaleString() }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="expense" label="總支出" width="120" align="right">
+                  <template #default="scope">
+                    <span class="text-red">HK$ {{ scope.row.expense.toLocaleString() }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="calculated" label="系統推算結餘" width="140" align="right">
+                  <template #default="scope">
+                    <span class="font-bold font-monospace">HK$ {{ scope.row.calculated.toLocaleString() }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="實際銀行結餘" width="200">
+                  <template #default="scope">
+                    <div class="input-wrapper">
+                      <el-input-number 
+                        v-model="scope.row.actual" 
+                        :controls="false" 
+                        placeholder="請輸入"
+                        size="small"
+                        style="width: 130px;"
+                        @change="(val) => saveMonthlyBalance(scope.row.month, val)"
+                      />
+                      <span v-if="scope.row.actual !== null" class="ml-2 font-bold font-monospace" style="font-size: 14px;">元</span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="差異對比" width="140" align="right">
+                  <template #default="scope">
+                    <div v-if="scope.row.actual !== null">
+                      <el-tag v-if="Math.abs(scope.row.diff) < 1" type="success" effect="light">
+                        🟢 相符
+                      </el-tag>
+                      <el-tag v-else type="danger" effect="light">
+                        🔴 差異 {{ scope.row.diff > 0 ? '+' : '' }}{{ scope.row.diff.toLocaleString() }}
+                      </el-tag>
+                    </div>
+                    <span v-else class="text-muted">-</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -258,6 +316,7 @@ const importing = ref(false)
 const rawIncomes = ref([])
 const rawExpenses = ref([])
 const rawInsurancePayments = ref([])
+const rawBalances = ref([]) // 🆕 對帳紀錄
 const policies = ref([])
 const members = ref([])
 const categories = ref([])
@@ -270,7 +329,7 @@ const activeDoneCollapse = ref([])
 
 // 新增/編輯彈窗狀態
 const dialogVisible = ref(false)
-const dialogType = ref('expense') // 'expense' | 'income'
+const dialogType = ref('expense')
 const isEdit = ref(false)
 const form = ref({ id: null, year_month: '', name: '', amount: 1, member_name: '', category_name: '', status: '未處理' })
 
@@ -283,7 +342,7 @@ const dialogTitle = computed(() => {
   return isEdit.value ? `編輯${typeName}` : `新增${typeName}`
 })
 
-// 🆕 計算期數
+// 計算期數
 const getPeriodNumber = (startDateStr, targetYearMonth) => {
   if (!startDateStr || !targetYearMonth) return ''
   const start = new Date(startDateStr)
@@ -358,7 +417,6 @@ const allProcessedItems = computed(() => {
   return items.sort((a, b) => b.year_month.localeCompare(a.year_month)) // 由新到舊
 })
 
-// 分組邏輯
 const groupByMonth = (items) => {
   const groups = {}
   items.forEach(item => {
@@ -370,19 +428,94 @@ const groupByMonth = (items) => {
   return Object.values(groups)
 }
 
-const pendingGroups = computed(() => groupByMonth(allPendingItems.value).sort((a, b) => a.month.localeCompare(b.month))) // 未辦由舊到新
-const processedGroups = computed(() => groupByMonth(allProcessedItems.value)) // 已辦由新到舊
+const pendingGroups = computed(() => groupByMonth(allPendingItems.value).sort((a, b) => a.month.localeCompare(b.month)))
+const processedGroups = computed(() => groupByMonth(allProcessedItems.value))
+
+// 🆕 計算對帳資料
+const reconcileData = computed(() => {
+  // 1. 收集所有發生過帳目的月份
+  const monthSet = new Set()
+  rawIncomes.value.forEach(i => monthSet.add(i.year_month))
+  rawExpenses.value.forEach(e => monthSet.add(e.year_month))
+  rawInsurancePayments.value.forEach(ip => monthSet.add(ip.year_month))
+  rawBalances.value.forEach(b => monthSet.add(b.year_month))
+  
+  // 2. 排序（由舊到新）
+  const sortedMonths = Array.from(monthSet).filter(Boolean).sort()
+  
+  let runningBalance = 0
+  const result = []
+  
+  sortedMonths.forEach(month => {
+    // 計算本月收支
+    const mInc = rawIncomes.value.filter(i => i.year_month === month).reduce((sum, i) => sum + Number(i.amount), 0)
+    const mExp = rawExpenses.value.filter(e => e.year_month === month && e.status === '已處理').reduce((sum, e) => sum + Number(e.amount), 0)
+    
+    const policyMap = {}
+    policies.value.forEach(p => { policyMap[p.id] = Number(p.monthly_average) })
+    const mIns = rawInsurancePayments.value.filter(ip => ip.year_month === month && ip.status === '已轉').reduce((sum, ip) => sum + (policyMap[ip.policy_id] || 0), 0)
+    
+    const totalExpense = mExp + mIns
+    const calculatedBalance = runningBalance + mInc - totalExpense
+    
+    // 查找實際結餘
+    const balanceRecord = rawBalances.value.find(b => b.year_month === month)
+    const actualBalance = balanceRecord ? Number(balanceRecord.actual_balance) : null
+    
+    let diff = 0
+    if (actualBalance !== null) {
+      diff = actualBalance - calculatedBalance
+      // 若有實際餘額，下個月的推算基準改為實際餘額
+      runningBalance = actualBalance
+    } else {
+      // 若無實際餘額，下個月基準為本月推算餘額
+      runningBalance = calculatedBalance
+    }
+    
+    result.push({
+      month,
+      income: mInc,
+      expense: totalExpense,
+      calculated: calculatedBalance,
+      actual: actualBalance,
+      diff
+    })
+  })
+  
+  // 返回倒序（最新的月份在最上面）
+  return result.reverse()
+})
+
+// 儲存每月實際結餘
+const saveMonthlyBalance = async (month, val) => {
+  if (val === null || val === undefined) return
+  try {
+    const familyId = '00000000-0000-0000-0000-000000000001'
+    const { error } = await supabase.from('monthly_balances').upsert({
+      family_id: familyId,
+      year_month: month,
+      actual_balance: val
+    }, { onConflict: 'family_id, year_month' })
+    
+    if (error) throw error
+    ElMessage.success(`✅ ${month} 對帳結餘已更新`)
+    fetchData() // 重新計算
+  } catch (err) {
+    ElMessage.error('儲存失敗：' + err.message)
+  }
+}
 
 const fetchData = async () => {
   loading.value = true
   try {
-    const [incRes, expRes, ipRes, polRes, mRes, cRes] = await Promise.all([
+    const [incRes, expRes, ipRes, polRes, mRes, cRes, balRes] = await Promise.all([
       supabase.from('incomes').select('*').order('year_month', { ascending: false }),
       supabase.from('expenses').select('*').order('year_month', { ascending: false }),
       supabase.from('insurance_payments').select('*'),
       supabase.from('insurance_policies').select('*'),
       supabase.from('members').select('*').order('created_at', { ascending: true }),
-      supabase.from('expense_categories').select('*').order('created_at', { ascending: true })
+      supabase.from('expense_categories').select('*').order('created_at', { ascending: true }),
+      supabase.from('monthly_balances').select('*') // 🆕
     ])
 
     if (incRes.data) rawIncomes.value = incRes.data
@@ -391,6 +524,7 @@ const fetchData = async () => {
     if (polRes.data) policies.value = polRes.data
     if (mRes.data) members.value = mRes.data
     if (cRes.data) categories.value = cRes.data
+    if (balRes.data) rawBalances.value = balRes.data // 🆕
   } catch (error) {
     ElMessage.error('載入資料失敗')
   } finally {
@@ -619,6 +753,12 @@ onMounted(() => fetchData())
 .text-muted { color: #94a3b8; }
 .font-bold { font-weight: 600; }
 
+/* 對帳頁面專用 */
+.reconcile-hint { background: #EEF2FF; color: #6366F1; padding: 12px 16px; border-radius: 10px; font-size: 14px; margin-bottom: 20px; }
+.input-wrapper { display: flex; align-items: center; }
+.font-monospace { font-family: monospace; }
+.ml-2 { margin-left: 8px; }
+
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
   .header-actions { width: 100%; justify-content: space-between; }
@@ -628,6 +768,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1793975000
+V: 1793979000
 W: ai-wa-fs-002
 ═══ -->
