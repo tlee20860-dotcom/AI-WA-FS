@@ -22,11 +22,11 @@
               HK$ {{ totalBalance.toLocaleString() }}
             </div>
             <div class="asset-sub" v-if="latestBalanceRecord">
-              <el-tag size="small" type="success" effect="dark" class="mr-2">對帳基準：{{ latestBalanceRecord.year_month }}</el-tag>
-              {{ latestBalanceRecord.year_month }} 結餘 + 後續收支推算
+              <el-tag size="small" type="success" effect="dark" class="mr-2">基準：{{ latestBalanceRecord.year_month }} 月初</el-tag>
+              {{ latestBalanceRecord.year_month }} 基準餘額 + 後續收支推算
             </div>
             <div class="asset-sub text-orange" v-else>
-              ⚠️ 尚未設定對帳基準，目前顯示歷史累計推算。請至「月度總覽」輸入真實餘額。
+              ⚠️ 尚未設定對帳基準。請至「待辦與紀錄中心」輸入月初實際結餘。
             </div>
           </div>
         </el-card>
@@ -128,11 +128,11 @@ const currentYear = new Date().getFullYear()
 // 家庭總餘額推算
 const totalBalance = computed(() => {
   if (latestBalanceRecord.value) {
-    // 如果有對帳紀錄，使用該紀錄為基準
+    // 有對帳紀錄：以最新輸入的「月初餘額」為基準 + 該月及之後的收入 - 支出
     const baseAmount = Number(latestBalanceRecord.value.actual_balance)
     return baseAmount + allTimeIncome.value - allTimeExpense.value
   } else {
-    // 如果從未對帳過，顯示歷史累計 (即 0 + 收入 - 支出)
+    // 從未對帳過：顯示歷史累計
     return allTimeIncome.value - allTimeExpense.value
   }
 })
@@ -152,7 +152,7 @@ const fetchDashboardData = async () => {
   try {
     const familyId = '00000000-0000-0000-0000-000000000001'
 
-    // 1. 抓取最新一筆對帳紀錄
+    // 1. 抓取最新一筆對帳紀錄 (最後一次輸入的月初餘額)
     const { data: balData } = await supabase
       .from('monthly_balances')
       .select('year_month, actual_balance')
@@ -162,6 +162,7 @@ const fetchDashboardData = async () => {
       .maybeSingle()
     
     latestBalanceRecord.value = balData
+    const baseYM = balData ? balData.year_month : '0000-00'
 
     // 2. 抓取所有收支紀錄
     const [incRes, expRes, insRes, polRes] = await Promise.all([
@@ -190,16 +191,14 @@ const fetchDashboardData = async () => {
     allTimeIncome.value = 0
     allTimeExpense.value = 0
 
-    const baseYM = latestBalanceRecord.value ? latestBalanceRecord.value.year_month : '0000-00'
-
     // 3. 計算收入
     if (incRes.data) {
       incRes.data.forEach(item => {
         if (!item.year_month) return
         const amount = Number(item.amount)
         
-        // 只有大於基準月份的才計入總餘額推算
-        if (item.year_month > baseYM) {
+        // 只有大於等於基準月份的才計入總餘額推算
+        if (item.year_month >= baseYM) {
           allTimeIncome.value += amount
         }
         
@@ -217,7 +216,8 @@ const fetchDashboardData = async () => {
         if (!item.year_month) return
         const amount = Number(item.amount)
         
-        if (item.year_month > baseYM) {
+        // 只有大於等於基準月份的才計入總餘額推算
+        if (item.year_month >= baseYM) {
           allTimeExpense.value += amount
         }
         
@@ -235,7 +235,7 @@ const fetchDashboardData = async () => {
         if (!item.year_month) return
         const amount = policyMap[item.policy_id] || 0
         
-        if (item.year_month > baseYM) {
+        if (item.year_month >= baseYM) {
           allTimeExpense.value += amount
         }
         
@@ -347,6 +347,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/DashboardView.vue
-V: 1793978000
+V: 1793985000
 W: ai-wa-fs-002
 ═══ -->
