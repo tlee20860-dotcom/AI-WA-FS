@@ -124,8 +124,11 @@ const rawInsurancePayments = ref([])
 const rawBalances = ref([])
 const policies = ref([])
 
+// 🆕 動態標題：顯示年份或年月
 const viewTitle = computed(() => {
-  return viewMode.value === 'year' ? `年度` : `${parseInt(selectedMonth.value)} 月`
+  return viewMode.value === 'year' 
+    ? `${selectedYear.value} 年` 
+    : `${selectedYear.value} 年 ${parseInt(selectedMonth.value)} 月`
 })
 
 const totalIncome = computed(() => monthlyData.value.reduce((sum, item) => sum + item.income, 0))
@@ -228,7 +231,7 @@ const getSummaries = (param) => {
   return sums
 }
 
-// 🆕 重寫 Excel 匯出：13 個分頁
+// 重寫 Excel 匯出：13 個分頁
 const exportExcel = async () => {
   if (monthlyData.value.length === 0) return ElMessage.warning('無資料可匯出')
   exporting.value = true
@@ -419,6 +422,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/AnnualReportView.vue
-V: 1793982000
+V: 1793989000
 W: ai-wa-fs-002
 ═══ -->
