@@ -379,9 +379,22 @@ const getPeriodNumber = (startDateStr, targetYearMonth) => {
   return diffMonths > 0 ? diffMonths : 1
 }
 
+// 🆕 計算各保單已轉筆數，用於過濾已供滿
+const policyPaidCounts = computed(() => {
+  const counts = {}
+  rawInsurancePayments.value.forEach(ip => {
+    if (ip.status === '已轉') {
+      counts[ip.policy_id] = (counts[ip.policy_id] || 0) + 1
+    }
+  })
+  return counts
+})
+
 // 轉換為統一的待辦格式
 const allPendingItems = computed(() => {
   const items = []
+  
+  // 1. 處理一般支出
   rawExpenses.value.forEach(e => {
     if (e.status !== '已處理') {
       items.push({
@@ -392,12 +405,21 @@ const allPendingItems = computed(() => {
     }
   })
 
+  // 2. 處理保險
   const policyMap = {}
   policies.value.forEach(p => { policyMap[p.id] = p })
+  
   rawInsurancePayments.value.forEach(ip => {
     if (ip.status !== '已轉') {
       const p = policyMap[ip.policy_id]
       if (p) {
+        // 🆕 檢查是否已供滿
+        const totalPeriods = p.total_years * 12
+        const paidCount = policyPaidCounts.value[p.id] || 0
+        
+        // 如果已轉筆數 >= 總期數，代表已供滿，強制忽略此筆未轉紀錄
+        if (paidCount >= totalPeriods) return
+
         const period = getPeriodNumber(p.start_date, ip.year_month)
         items.push({
           id: `ins_${ip.id}`, realId: ip.id, type: 'insurance',
@@ -407,6 +429,7 @@ const allPendingItems = computed(() => {
       }
     }
   })
+  
   return items.sort((a, b) => a.year_month.localeCompare(b.year_month))
 })
 
@@ -817,6 +840,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1793987000
+V: 1794004000
 W: ai-wa-fs-002
 ═══ -->
