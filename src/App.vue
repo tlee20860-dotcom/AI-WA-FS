@@ -85,10 +85,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document, Setting, Tickets, User } from '@element-plus/icons-vue'
 
-const router = useRouter()
 const isCollapse = ref(false)
 const isMobile = ref(false)
 const isMobileOpen = ref(false)
@@ -128,7 +126,8 @@ const onMenuSelect = () => {
 
 const handleLogout = () => {
   localStorage.removeItem('app_user')
-  router.replace('/login')
+  // 🆕 使用強制跳轉確保清除所有 Vue 狀態並回到登入頁
+  window.location.href = '/login'
 }
 
 onMounted(() => {
@@ -259,6 +258,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793995000
+V: 1793998000
 W: ai-wa-fs-002
 ═══ -->
