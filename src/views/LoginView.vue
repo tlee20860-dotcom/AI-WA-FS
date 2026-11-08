@@ -85,40 +85,25 @@ const handleLogin = async () => {
   
   try {
     const cleanAccount = account.value.trim()
-    
-    // 查詢 app_users 表
-    const { data, error } = await supabase
-      .from('app_users')
-      .select('*')
-      .eq('username', cleanAccount)
-      .eq('password', password.value)
-      .maybeSingle()
+    // 若無 @，自動補齊虛擬 Email 後綴
+    const virtualEmail = cleanAccount.includes('@') ? cleanAccount : `${cleanAccount}@fs-app.com`
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: virtualEmail,
+      password: password.value,
+    })
 
     if (error) throw error
     
-    if (!data) {
-      errorMsg.value = '帳號或密碼錯誤，請重新輸入'
-      return
-    }
-
-    // 登入成功，儲存至 localStorage
-    const userInfo = {
-      id: data.id,
-      username: data.username,
-      role: data.role
-    }
-    localStorage.setItem('app_user', JSON.stringify(userInfo))
-    
     ElMessage.success('登入成功！')
-    
-    // 🆕 使用強制跳轉確保徹底重新載入並進入首頁
-    setTimeout(() => {
-      window.location.href = '/'
-    }, 500)
+    // 使用 reload 強制刷新頁面，確保路由守衛重新讀取 session
+    window.location.reload()
     
   } catch (error) {
     console.error(error)
-    errorMsg.value = '登入失敗，請檢查網路連線'
+    errorMsg.value = error.message === 'Invalid login credentials' 
+      ? '帳號或密碼錯誤，請重新輸入' 
+      : '登入失敗：' + error.message
   } finally {
     loading.value = false
   }
@@ -256,6 +241,6 @@ const handleLogin = async () => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/LoginView.vue
-V: 1793997000
+V: 1793999000
 W: ai-wa-fs-002
 ═══ -->
