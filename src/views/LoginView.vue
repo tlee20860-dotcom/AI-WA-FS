@@ -65,12 +65,10 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { supabase } from '@/config/supabase'
 import { ElMessage } from 'element-plus'
 import { Wallet, WarningFilled } from '@element-plus/icons-vue'
 
-const router = useRouter()
 const account = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -112,8 +110,11 @@ const handleLogin = async () => {
     localStorage.setItem('app_user', JSON.stringify(userInfo))
     
     ElMessage.success('登入成功！')
-    // 跳轉至首頁，並使用 replace 避免使用者按上一頁回到登入頁
-    router.replace('/')
+    
+    // 🆕 使用強制跳轉確保徹底重新載入並進入首頁
+    setTimeout(() => {
+      window.location.href = '/'
+    }, 500)
     
   } catch (error) {
     console.error(error)
@@ -255,6 +256,6 @@ const handleLogin = async () => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/LoginView.vue
-V: 1793993000
+V: 1793997000
 W: ai-wa-fs-002
 ═══ -->
