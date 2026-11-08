@@ -26,36 +26,6 @@
       </div>
     </div>
 
-    <!-- 統計卡片 -->
-    <el-row :gutter="20" class="mb-24" v-loading="loading">
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card">
-          <div class="stat-label">{{ viewTitle }}總收入</div>
-          <div class="stat-value text-green">HK$ {{ totalIncome.toLocaleString() }}</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card">
-          <div class="stat-label">{{ viewTitle }}總支出</div>
-          <div class="stat-value text-red">HK$ {{ totalExpense.toLocaleString() }}</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card">
-          <div class="stat-label">{{ viewTitle }}保險支出</div>
-          <div class="stat-value text-orange">HK$ {{ totalInsurance.toLocaleString() }}</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="stat-card">
-          <div class="stat-label">{{ viewTitle }}淨結餘</div>
-          <div class="stat-value" :class="netBalance >= 0 ? 'text-green' : 'text-red'">
-            {{ netBalance >= 0 ? '+' : '' }} HK$ {{ netBalance.toLocaleString() }}
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-
     <!-- 月度/單月明細表格 -->
     <el-card shadow="never" class="table-card" v-loading="loading">
       <div class="table-wrapper">
@@ -124,13 +94,14 @@ const rawInsurancePayments = ref([])
 const rawBalances = ref([])
 const policies = ref([])
 
-// 🆕 動態標題：顯示年份或年月
+// 動態標題：顯示年份或年月
 const viewTitle = computed(() => {
   return viewMode.value === 'year' 
     ? `${selectedYear.value} 年` 
     : `${selectedYear.value} 年 ${parseInt(selectedMonth.value)} 月`
 })
 
+// 保留這些變數是為了下方表格的「底部總計列」
 const totalIncome = computed(() => monthlyData.value.reduce((sum, item) => sum + item.income, 0))
 const totalExpense = computed(() => monthlyData.value.reduce((sum, item) => sum + item.expense, 0))
 const totalInsurance = computed(() => monthlyData.value.reduce((sum, item) => sum + item.insurance, 0))
@@ -394,17 +365,7 @@ onMounted(() => fetchData())
 .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .month-picker { width: 100px; }
 
-.mb-24 { margin-bottom: 24px; }
-.stat-card { border-radius: 20px; background: #ffffff; border: none; }
-.stat-label { font-size: 14px; color: #64748b; margin-bottom: 8px; }
-.stat-value { font-size: 22px; font-weight: bold; }
-.text-green { color: #10b981; }
-.text-red { color: #ef4444; }
-.text-orange { color: #f59e0b; }
-.text-muted { color: #94a3b8; }
-.font-bold { font-weight: 700; }
-.font-monospace { font-family: monospace; font-size: 14px; }
-
+/* 移除統計卡片後，表格直接貼齊上方 */
 .table-card { border-radius: 20px; border: none; overflow: hidden; }
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 :deep(.el-table__footer-wrapper tbody td) {
@@ -413,15 +374,21 @@ onMounted(() => fetchData())
   color: #1e293b;
 }
 
+.text-green { color: #10b981; }
+.text-red { color: #ef4444; }
+.text-orange { color: #f59e0b; }
+.text-muted { color: #94a3b8; }
+.font-bold { font-weight: 700; }
+.font-monospace { font-family: monospace; font-size: 14px; }
+
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
   .header-actions { width: 100%; justify-content: space-between; }
-  .stat-value { font-size: 18px; }
 }
 </style>
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/AnnualReportView.vue
-V: 1793989000
+V: 1793992000
 W: ai-wa-fs-002
 ═══ -->
