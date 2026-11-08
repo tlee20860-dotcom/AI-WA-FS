@@ -19,8 +19,13 @@
               <el-empty description="尚無任何收入紀錄" :image-size="80" />
             </div>
             <div v-else class="table-wrapper">
-              <el-table :data="rawIncomes" style="width: 100%; min-width: 500px;" stripe>
+              <el-table :data="rawIncomes" style="width: 100%; min-width: 600px;" stripe>
                 <el-table-column prop="year_month" label="月份" width="100" sortable />
+                <el-table-column prop="created_at" label="輸入日期" width="120">
+                  <template #default="scope">
+                    <span class="text-muted text-sm">{{ formatDate(scope.row.created_at) }}</span>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="member_name" label="對象" width="120" />
                 <el-table-column prop="name" label="收入名稱" min-width="150" />
                 <el-table-column prop="amount" label="金額" width="120" align="right">
@@ -51,8 +56,13 @@
               <el-empty description="尚無任何支出紀錄" :image-size="80" />
             </div>
             <div v-else class="table-wrapper">
-              <el-table :data="rawExpenses" style="width: 100%; min-width: 600px;" stripe>
+              <el-table :data="rawExpenses" style="width: 100%; min-width: 700px;" stripe>
                 <el-table-column prop="year_month" label="月份" width="100" sortable />
+                <el-table-column prop="created_at" label="輸入日期" width="120">
+                  <template #default="scope">
+                    <span class="text-muted text-sm">{{ formatDate(scope.row.created_at) }}</span>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="payer_name" label="對象" width="100" />
                 <el-table-column prop="name" label="項目名稱" min-width="150" />
                 <el-table-column prop="category_name" label="類別" width="120">
@@ -366,6 +376,12 @@ const dialogTitle = computed(() => {
   return isEdit.value ? `編輯${typeName}` : `新增${typeName}`
 })
 
+// 🆕 格式化輸入日期
+const formatDate = (datetime) => {
+  if (!datetime) return '-'
+  return datetime.split('T')[0]
+}
+
 // 計算期數
 const getPeriodNumber = (startDateStr, targetYearMonth) => {
   if (!startDateStr || !targetYearMonth) return ''
@@ -379,7 +395,7 @@ const getPeriodNumber = (startDateStr, targetYearMonth) => {
   return diffMonths > 0 ? diffMonths : 1
 }
 
-// 🆕 計算各保單已轉筆數，用於過濾已供滿
+// 計算各保單已轉筆數，用於過濾已供滿
 const policyPaidCounts = computed(() => {
   const counts = {}
   rawInsurancePayments.value.forEach(ip => {
@@ -413,7 +429,7 @@ const allPendingItems = computed(() => {
     if (ip.status !== '已轉') {
       const p = policyMap[ip.policy_id]
       if (p) {
-        // 🆕 檢查是否已供滿
+        // 檢查是否已供滿
         const totalPeriods = p.total_years * 12
         const paidCount = policyPaidCounts.value[p.id] || 0
         
@@ -823,6 +839,7 @@ onMounted(() => fetchData())
 .text-blue { color: #3b82f6; }
 .text-muted { color: #94a3b8; }
 .font-bold { font-weight: 600; }
+.text-sm { font-size: 13px; }
 
 /* 對帳頁面專用 */
 .reconcile-hint { background: #EEF2FF; color: #6366F1; padding: 12px 16px; border-radius: 10px; font-size: 14px; line-height: 1.6; }
@@ -840,6 +857,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1794004000
+V: 1794005000
 W: ai-wa-fs-002
 ═══ -->
