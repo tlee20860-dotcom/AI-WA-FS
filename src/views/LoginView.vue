@@ -65,10 +65,12 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '@/config/supabase'
 import { ElMessage } from 'element-plus'
 import { Wallet, WarningFilled } from '@element-plus/icons-vue'
 
+const router = useRouter()
 const account = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -85,22 +87,37 @@ const handleLogin = async () => {
   
   try {
     const cleanAccount = account.value.trim()
-    const virtualEmail = cleanAccount.includes('@') ? cleanAccount : `${cleanAccount}@fs-app.com`
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: virtualEmail,
-      password: password.value,
-    })
+    
+    // 查詢 app_users 表
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('username', cleanAccount)
+      .eq('password', password.value)
+      .maybeSingle()
 
     if (error) throw error
     
+    if (!data) {
+      errorMsg.value = '帳號或密碼錯誤，請重新輸入'
+      return
+    }
+
+    // 登入成功，儲存至 localStorage
+    const userInfo = {
+      id: data.id,
+      username: data.username,
+      role: data.role
+    }
+    localStorage.setItem('app_user', JSON.stringify(userInfo))
+    
     ElMessage.success('登入成功！')
-    window.location.reload()
+    // 跳轉至首頁，並使用 replace 避免使用者按上一頁回到登入頁
+    router.replace('/')
     
   } catch (error) {
-    errorMsg.value = error.message === 'Invalid login credentials' 
-      ? '帳號或密碼錯誤，請重新輸入' 
-      : '登入失敗：' + error.message
+    console.error(error)
+    errorMsg.value = '登入失敗，請檢查網路連線'
   } finally {
     loading.value = false
   }
@@ -235,8 +252,9 @@ const handleLogin = async () => {
   z-index: 1;
 }
 </style>
+
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/LoginView.vue
-V: 1793811500
-W: ai-wa-fs-001
+V: 1793993000
+W: ai-wa-fs-002
 ═══ -->
