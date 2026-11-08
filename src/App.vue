@@ -72,7 +72,7 @@
         <el-button class="menu-toggle" text @click="toggleMenu">
           <el-icon :size="20"><Menu /></el-icon>
         </el-button>
-        <div class="header-title">歡迎回來，{{ currentUsername }}</div>
+        <div class="header-title">歡迎回來</div>
         <el-button type="danger" plain size="small" class="logout-btn" @click="handleLogout">登出</el-button>
       </el-header>
       
@@ -84,24 +84,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { supabase } from '@/config/supabase'
 import { HomeFilled, Money, Umbrella, Menu, TrendCharts, Document, Setting, Tickets, User } from '@element-plus/icons-vue'
 
 const isCollapse = ref(false)
 const isMobile = ref(false)
 const isMobileOpen = ref(false)
-
-// 取得當前登入帳號名稱
-const currentUsername = computed(() => {
-  const userStr = localStorage.getItem('app_user')
-  if (!userStr) return '使用者'
-  try {
-    const user = JSON.parse(userStr)
-    return user.username || '使用者'
-  } catch (e) {
-    return '使用者'
-  }
-})
 
 const checkScreenSize = () => {
   isMobile.value = window.innerWidth < 768
@@ -124,9 +113,8 @@ const onMenuSelect = () => {
   }
 }
 
-const handleLogout = () => {
-  localStorage.removeItem('app_user')
-  // 🆕 使用強制跳轉確保清除所有 Vue 狀態並回到登入頁
+const handleLogout = async () => {
+  await supabase.auth.signOut()
   window.location.href = '/login'
 }
 
@@ -258,6 +246,6 @@ body { margin: 0; padding: 0; font-family: 'Noto Sans TC', sans-serif; backgroun
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/App.vue
-V: 1793998000
+V: 1794001000
 W: ai-wa-fs-002
 ═══ -->
