@@ -64,18 +64,25 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from, next) => {
+  // 使用 Supabase Auth 取得 Session
   const { data: { session } } = await supabase.auth.getSession()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   
-  if (requiresAuth && !session) next('/login')
-  else if (to.path === '/login' && session) next('/')
-  else next()
+  if (requiresAuth && !session) {
+    // 需要權限但未登入，跳轉至登入頁
+    next('/login')
+  } else if (to.path === '/login' && session) {
+    // 已登入且嘗試去登入頁，跳轉回首頁
+    next('/')
+  } else {
+    next()
+  }
 })
 
 export default router
 
 /* ═══ EOF ═══
 F: AI-WA-FS/src/router/index.js
-V: 1793974100
+V: 1794000000
 W: ai-wa-fs-002
 ═══ */
