@@ -23,7 +23,10 @@
     <div v-else class="member-grid">
       <el-card v-for="member in memberStats" :key="member.name" shadow="hover" class="member-card">
         <div class="card-header">
-          <h3 class="member-name">{{ member.name }}</h3>
+          <h3 class="member-name" @click="openExpenseDialog(member.name)">
+            {{ member.name }}
+            <span class="click-hint">點擊看支出明細</span>
+          </h3>
         </div>
         
         <div class="card-body">
@@ -55,6 +58,41 @@
         </div>
       </el-card>
     </div>
+
+    <!-- 支出明細彈窗 -->
+    <el-dialog 
+      v-model="expenseDialogVisible" 
+      :title="`${currentMemberName} 的支出明細 (${selectedMonth})`" 
+      width="90%" 
+      max-width="600px"
+    >
+      <div v-if="currentMemberExpenses.length === 0" class="empty-dialog">
+        <el-empty description="該成員本月沒有一般支出紀錄" :image-size="60" />
+      </div>
+      <div v-else class="table-wrapper">
+        <el-table :data="currentMemberExpenses" style="width: 100%; min-width: 500px;" stripe size="small">
+          <el-table-column prop="name" label="項目名稱" min-width="150" />
+          <el-table-column prop="category_name" label="類別" width="120">
+            <template #default="scope">
+              <el-tag size="small" type="info">{{ scope.row.category_name || '未分類' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="amount" label="金額" width="120" align="right">
+            <template #default="scope">
+              <span class="text-red font-bold">HK$ {{ Number(scope.row.amount).toLocaleString() }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="created_at" label="輸入日期" width="110" align="center">
+            <template #default="scope">
+              <span class="text-muted text-sm">{{ formatDate(scope.row.created_at) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="expenseDialogVisible = false">關閉</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -72,6 +110,17 @@ const members = ref([])
 const rawIncomes = ref([])
 const rawExpenses = ref([])
 const policies = ref([])
+
+// 彈窗狀態
+const expenseDialogVisible = ref(false)
+const currentMemberName = ref('')
+const currentMemberExpenses = ref([])
+
+// 格式化日期
+const formatDate = (datetime) => {
+  if (!datetime) return '-'
+  return datetime.split('T')[0]
+}
 
 // 計算每位成員的統計
 const memberStats = computed(() => {
@@ -154,6 +203,17 @@ const fetchData = async () => {
   }
 }
 
+// 開啟支出明細彈窗
+const openExpenseDialog = (memberName) => {
+  currentMemberName.value = memberName
+  // 過濾出該成員在該月的支出
+  currentMemberExpenses.value = rawExpenses.value
+    .filter(exp => exp.payer_name === memberName)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  
+  expenseDialogVisible.value = true
+}
+
 onMounted(() => {
   fetchData()
 })
@@ -185,6 +245,11 @@ onMounted(() => {
   border: none; 
   background: #ffffff; 
   box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.member-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08) !important;
 }
 .member-card :deep(.el-card__body) {
   padding: 24px;
@@ -196,7 +261,22 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #6366F1; /* 主色調，與截圖一致 */
+  color: #6366F1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s;
+}
+.member-name:hover {
+  color: #4F46E5;
+  text-decoration: underline;
+}
+.click-hint {
+  font-size: 12px;
+  font-weight: normal;
+  color: #94a3b8;
+  text-decoration: none !important;
 }
 
 .card-body {
@@ -236,7 +316,13 @@ onMounted(() => {
 .text-green { color: #10b981; }
 .text-red { color: #ef4444; }
 .text-orange { color: #f59e0b; }
+.text-muted { color: #94a3b8; }
 .font-bold { font-weight: 700; }
+.text-sm { font-size: 13px; }
+
+/* 彈窗內表格 */
+.table-wrapper { width: 100%; overflow-x: auto; }
+.empty-dialog { padding: 20px 0; }
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
@@ -246,6 +332,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/MemberReportView.vue
-V: 1793974000
+V: 1794007000
 W: ai-wa-fs-002
 ═══ -->
