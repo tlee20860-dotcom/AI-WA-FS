@@ -202,7 +202,7 @@ const getSummaries = (param) => {
   return sums
 }
 
-// 重寫 Excel 匯出：13 個分頁
+// 重寫 Excel 匯出：13 個分頁，且拆分收入/支出小計
 const exportExcel = async () => {
   if (monthlyData.value.length === 0) return ElMessage.warning('無資料可匯出')
   exporting.value = true
@@ -286,37 +286,84 @@ const exportExcel = async () => {
       })
 
       let currentRow = 2
-      let grandTotal = 0
+      let grandIncome = 0
+      let grandExpense = 0
 
       for (const [payer, groupItems] of Object.entries(grouped)) {
-        let subtotal = 0
+        let subtotalIncome = 0
+        let subtotalExpense = 0
+
         groupItems.forEach(item => {
           const row = ws.addRow(item)
           row.getCell('amount').alignment = { horizontal: 'right' }
-          subtotal += item.amount
+          
+          if (item.type === '收入') {
+            subtotalIncome += item.amount
+          } else {
+            subtotalExpense += item.amount
+          }
           currentRow++
         })
-        grandTotal += subtotal
 
-        const subtotalRow = ws.addRow({
-          year_month: '', type: '', payer: '', name: `${payer} 小計`, category: '', amount: subtotal, status: ''
-        })
-        ws.mergeCells(`A${currentRow}:D${currentRow}`)
-        subtotalRow.getCell(4).alignment = { horizontal: 'right' }
-        subtotalRow.getCell(6).alignment = { horizontal: 'right' }
-        subtotalRow.font = { bold: true }
-        subtotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }
-        currentRow++
+        grandIncome += subtotalIncome
+        grandExpense += subtotalExpense
+
+        // 🆕 寫入「收入小計」
+        if (subtotalIncome > 0) {
+          const incSubtotalRow = ws.addRow({
+            year_month: '', type: '', payer: '', name: `${payer} 收入小計`, category: '', amount: subtotalIncome, status: ''
+          })
+          ws.mergeCells(`A${currentRow}:D${currentRow}`)
+          incSubtotalRow.getCell(4).alignment = { horizontal: 'right' }
+          incSubtotalRow.getCell(6).alignment = { horizontal: 'right' }
+          incSubtotalRow.font = { bold: true, color: { argb: 'FF10B981' } } // 綠色
+          incSubtotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFDF5' } }
+          currentRow++
+        }
+
+        // 🆕 寫入「支出小計」
+        if (subtotalExpense > 0) {
+          const expSubtotalRow = ws.addRow({
+            year_month: '', type: '', payer: '', name: `${payer} 支出小計`, category: '', amount: subtotalExpense, status: ''
+          })
+          ws.mergeCells(`A${currentRow}:D${currentRow}`)
+          expSubtotalRow.getCell(4).alignment = { horizontal: 'right' }
+          expSubtotalRow.getCell(6).alignment = { horizontal: 'right' }
+          expSubtotalRow.font = { bold: true, color: { argb: 'FFEF4444' } } // 紅色
+          expSubtotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } }
+          currentRow++
+        }
       }
 
-      const totalRow = ws.addRow({
-        year_month: '', type: '', payer: '', name: `${title}總計`, category: '', amount: grandTotal, status: ''
+      // 🆕 寫入全局總計
+      const totalIncomeRow = ws.addRow({
+        year_month: '', type: '', payer: '', name: `${title}總收入`, category: '', amount: grandIncome, status: ''
       })
       ws.mergeCells(`A${currentRow}:D${currentRow}`)
-      totalRow.getCell(4).alignment = { horizontal: 'right' }
-      totalRow.getCell(6).alignment = { horizontal: 'right' }
-      totalRow.font = { bold: true, color: { argb: 'FF6366F1' } }
-      totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } }
+      totalIncomeRow.getCell(4).alignment = { horizontal: 'right' }
+      totalIncomeRow.getCell(6).alignment = { horizontal: 'right' }
+      totalIncomeRow.font = { bold: true, color: { argb: 'FF10B981' } }
+      totalIncomeRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }
+      currentRow++
+
+      const totalExpenseRow = ws.addRow({
+        year_month: '', type: '', payer: '', name: `${title}總支出`, category: '', amount: grandExpense, status: ''
+      })
+      ws.mergeCells(`A${currentRow}:D${currentRow}`)
+      totalExpenseRow.getCell(4).alignment = { horizontal: 'right' }
+      totalExpenseRow.getCell(6).alignment = { horizontal: 'right' }
+      totalExpenseRow.font = { bold: true, color: { argb: 'FFEF4444' } }
+      totalExpenseRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }
+      currentRow++
+
+      const netRow = ws.addRow({
+        year_month: '', type: '', payer: '', name: `${title}淨收支`, category: '', amount: grandIncome - grandExpense, status: ''
+      })
+      ws.mergeCells(`A${currentRow}:D${currentRow}`)
+      netRow.getCell(4).alignment = { horizontal: 'right' }
+      netRow.getCell(6).alignment = { horizontal: 'right' }
+      netRow.font = { bold: true, color: { argb: 'FF6366F1' } }
+      netRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } }
 
       ws.eachRow((row) => {
         row.eachCell((cell) => {
@@ -365,7 +412,6 @@ onMounted(() => fetchData())
 .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .month-picker { width: 100px; }
 
-/* 移除統計卡片後，表格直接貼齊上方 */
 .table-card { border-radius: 20px; border: none; overflow: hidden; }
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 :deep(.el-table__footer-wrapper tbody td) {
@@ -389,6 +435,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/AnnualReportView.vue
-V: 1793992000
+V: 1794006000
 W: ai-wa-fs-002
 ═══ -->
