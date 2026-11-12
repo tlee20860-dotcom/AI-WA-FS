@@ -25,7 +25,7 @@
         <div class="card-header">
           <h3 class="member-name" @click="openExpenseDialog(member.name)">
             {{ member.name }}
-            <span class="click-hint">點擊看支出明細</span>
+            <span class="click-hint">點擊看支出分類</span>
           </h3>
         </div>
         
@@ -59,35 +59,31 @@
       </el-card>
     </div>
 
-    <!-- 支出明細彈窗 -->
+    <!-- 支出分類明細彈窗 -->
     <el-dialog 
       v-model="expenseDialogVisible" 
-      :title="`${currentMemberName} 的支出明細 (${selectedMonth})`" 
+      :title="`${currentMemberName} 的支出分類 (${selectedMonth})`" 
       width="90%" 
-      max-width="600px"
+      max-width="500px"
     >
       <div v-if="currentMemberExpenses.length === 0" class="empty-dialog">
         <el-empty description="該成員本月沒有一般支出紀錄" :image-size="60" />
       </div>
       <div v-else class="table-wrapper">
-        <el-table :data="currentMemberExpenses" style="width: 100%; min-width: 500px;" stripe size="small">
-          <el-table-column prop="name" label="項目名稱" min-width="150" />
-          <el-table-column prop="category_name" label="類別" width="120">
+        <el-table :data="currentMemberExpenses" style="width: 100%;" stripe size="small">
+          <el-table-column prop="category" label="支出類別" min-width="150" />
+          <el-table-column prop="amount" label="總金額" align="right">
             <template #default="scope">
-              <el-tag size="small" type="info">{{ scope.row.category_name || '未分類' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="amount" label="金額" width="120" align="right">
-            <template #default="scope">
-              <span class="text-red font-bold">HK$ {{ Number(scope.row.amount).toLocaleString() }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="created_at" label="輸入日期" width="110" align="center">
-            <template #default="scope">
-              <span class="text-muted text-sm">{{ formatDate(scope.row.created_at) }}</span>
+              <span class="text-red font-bold">HK$ {{ scope.row.amount.toLocaleString() }}</span>
             </template>
           </el-table-column>
         </el-table>
+        
+        <!-- 彈窗底部加總 -->
+        <div class="dialog-footer-summary">
+          <span>一般支出總計：</span>
+          <span class="text-red font-bold" style="font-size: 18px;">HK$ {{ dialogTotalExpense.toLocaleString() }}</span>
+        </div>
       </div>
       <template #footer>
         <el-button type="primary" @click="expenseDialogVisible = false">關閉</el-button>
@@ -115,12 +111,7 @@ const policies = ref([])
 const expenseDialogVisible = ref(false)
 const currentMemberName = ref('')
 const currentMemberExpenses = ref([])
-
-// 格式化日期
-const formatDate = (datetime) => {
-  if (!datetime) return '-'
-  return datetime.split('T')[0]
-}
+const dialogTotalExpense = ref(0)
 
 // 計算每位成員的統計
 const memberStats = computed(() => {
@@ -179,19 +170,15 @@ const fetchData = async () => {
   loading.value = true
 
   try {
-    // 抓取成員
     const mRes = await supabase.from('members').select('*').order('created_at', { ascending: true })
     if (mRes.data) members.value = mRes.data
 
-    // 抓取該月收入
     const incRes = await supabase.from('incomes').select('*').eq('year_month', selectedMonth.value)
     if (incRes.data) rawIncomes.value = incRes.data
 
-    // 抓取該月支出 (僅已處理)
     const expRes = await supabase.from('expenses').select('*').eq('year_month', selectedMonth.value).eq('status', '已處理')
     if (expRes.data) rawExpenses.value = expRes.data
 
-    // 抓取所有保單
     const polRes = await supabase.from('insurance_policies').select('*')
     if (polRes.data) policies.value = polRes.data
 
@@ -203,14 +190,28 @@ const fetchData = async () => {
   }
 }
 
-// 開啟支出明細彈窗
+// 開啟支出分類彈窗
 const openExpenseDialog = (memberName) => {
   currentMemberName.value = memberName
-  // 過濾出該成員在該月的支出
-  currentMemberExpenses.value = rawExpenses.value
-    .filter(exp => exp.payer_name === memberName)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   
+  const memberExpenses = rawExpenses.value.filter(exp => exp.payer_name === memberName)
+  
+  // 按分類分組加總
+  const grouped = {}
+  memberExpenses.forEach(exp => {
+    const cat = exp.category_name || '未分類'
+    if (!grouped[cat]) grouped[cat] = 0
+    grouped[cat] += Number(exp.amount)
+  })
+
+  // 轉為陣列並計算總計
+  let total = 0
+  currentMemberExpenses.value = Object.entries(grouped).map(([category, amount]) => {
+    total += amount
+    return { category, amount }
+  }).sort((a, b) => b.amount - a.amount) // 按金額大到小排序
+
+  dialogTotalExpense.value = total
   expenseDialogVisible.value = true
 }
 
@@ -316,13 +317,21 @@ onMounted(() => {
 .text-green { color: #10b981; }
 .text-red { color: #ef4444; }
 .text-orange { color: #f59e0b; }
-.text-muted { color: #94a3b8; }
 .font-bold { font-weight: 700; }
-.text-sm { font-size: 13px; }
 
 /* 彈窗內表格 */
 .table-wrapper { width: 100%; overflow-x: auto; }
 .empty-dialog { padding: 20px 0; }
+.dialog-footer-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 12px 0 12px;
+  margin-top: 12px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 15px;
+  color: #334155;
+}
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
@@ -332,6 +341,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/MemberReportView.vue
-V: 1794007000
+V: 1794008000
 W: ai-wa-fs-002
 ═══ -->
