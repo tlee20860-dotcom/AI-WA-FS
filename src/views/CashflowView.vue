@@ -24,11 +24,11 @@
         </div>
       </el-card>
 
-      <!-- 2. 普通支出 -->
-      <el-card shadow="never" class="stat-card expense-card">
+      <!-- 2. 普通支出 (可點擊) -->
+      <el-card shadow="never" class="stat-card expense-card clickable" @click="openCategoryDialog">
         <div class="stat-icon"><el-icon><Bottom /></el-icon></div>
         <div class="stat-info">
-          <div class="stat-label">{{ currentMonthLabel }}普通支出</div>
+          <div class="stat-label">{{ currentMonthLabel }}普通支出 <span class="click-hint">(點擊看分類)</span></div>
           <div class="stat-value text-red">HK$ {{ processedExpense.toLocaleString() }}</div>
           <div class="stat-sub">
             待處理：<span class="text-orange">HK$ {{ pendingExpense.toLocaleString() }}</span>
@@ -60,6 +60,41 @@
         </div>
       </el-card>
     </div>
+
+    <!-- 支出分類明細彈窗 -->
+    <el-dialog 
+      v-model="categoryDialogVisible" 
+      :title="`${currentMonthLabel} 支出分類明細`" 
+      width="90%" 
+      max-width="600px"
+    >
+      <div v-if="categoryStats.length === 0" class="empty-dialog">
+        <el-empty description="該月份沒有支出紀錄" :image-size="60" />
+      </div>
+      <div v-else class="table-wrapper">
+        <el-table :data="categoryStats" style="width: 100%; min-width: 500px;" stripe size="small">
+          <el-table-column prop="category" label="支出分類" min-width="150" />
+          <el-table-column prop="processed" label="已處理" align="right">
+            <template #default="scope">
+              <span class="text-red font-bold">HK$ {{ scope.row.processed.toLocaleString() }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="pending" label="未處理" align="right">
+            <template #default="scope">
+              <span class="text-orange">HK$ {{ scope.row.pending.toLocaleString() }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="total" label="該分類總計" align="right">
+            <template #default="scope">
+              <span class="font-bold">HK$ {{ scope.row.total.toLocaleString() }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="categoryDialogVisible = false">關閉</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -86,8 +121,39 @@ const pendingExpense = ref(0)
 const processedInsurance = ref(0)
 const pendingInsurance = ref(0)
 
+// 原始資料 (用於分類統計)
+const rawExpenses = ref([])
+
+// 彈窗狀態
+const categoryDialogVisible = ref(false)
+
 // 計算實際總支出 (已處理 + 已轉)
 const totalProcessed = computed(() => processedExpense.value + processedInsurance.value)
+
+// 分類統計
+const categoryStats = computed(() => {
+  const grouped = {}
+  rawExpenses.value.forEach(exp => {
+    const cat = exp.category_name || '未分類'
+    if (!grouped[cat]) {
+      grouped[cat] = { category: cat, processed: 0, pending: 0, total: 0 }
+    }
+    const amount = Number(exp.amount)
+    if (exp.status === '已處理') {
+      grouped[cat].processed += amount
+    } else {
+      grouped[cat].pending += amount
+    }
+    grouped[cat].total += amount
+  })
+  
+  // 轉為陣列並按總金額大到小排序
+  return Object.values(grouped).sort((a, b) => b.total - a.total)
+})
+
+const openCategoryDialog = () => {
+  categoryDialogVisible.value = true
+}
 
 const fetchData = async () => {
   if (!selectedMonth.value) return
@@ -96,7 +162,7 @@ const fetchData = async () => {
   try {
     const [incRes, expRes, insPayRes, polRes] = await Promise.all([
       supabase.from('incomes').select('amount').eq('year_month', selectedMonth.value),
-      supabase.from('expenses').select('amount, status').eq('year_month', selectedMonth.value),
+      supabase.from('expenses').select('amount, status, category_name').eq('year_month', selectedMonth.value),
       supabase.from('insurance_payments').select('policy_id, status').eq('year_month', selectedMonth.value),
       supabase.from('insurance_policies').select('id, monthly_average')
     ])
@@ -112,16 +178,16 @@ const fetchData = async () => {
     // 2. 計算普通支出
     processedExpense.value = 0
     pendingExpense.value = 0
-    if (expRes.data) {
-      expRes.data.forEach(item => {
-        const amount = Number(item.amount)
-        if (item.status === '已處理') {
-          processedExpense.value += amount
-        } else {
-          pendingExpense.value += amount
-        }
-      })
-    }
+    rawExpenses.value = expRes.data || []
+    
+    rawExpenses.value.forEach(item => {
+      const amount = Number(item.amount)
+      if (item.status === '已處理') {
+        processedExpense.value += amount
+      } else {
+        pendingExpense.value += amount
+      }
+    })
 
     // 3. 計算保險支出
     const policyMap = {}
@@ -178,6 +244,14 @@ onMounted(() => {
   background: #ffffff; 
   height: 100%;
   box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card.clickable {
+  cursor: pointer;
+}
+.stat-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08) !important;
 }
 .stat-card :deep(.el-card__body) {
   display: flex;
@@ -201,6 +275,7 @@ onMounted(() => {
 
 .stat-info { display: flex; flex-direction: column; width: 100%; }
 .stat-label { font-size: 14px; color: #64748b; margin-bottom: 8px; font-weight: 500; }
+.click-hint { font-size: 12px; color: #94a3b8; }
 .stat-value { font-size: 24px; font-weight: 700; font-family: monospace; line-height: 1.2; margin-bottom: 8px; }
 .stat-sub { font-size: 13px; color: #94a3b8; margin-top: auto; }
 
@@ -209,6 +284,11 @@ onMounted(() => {
 .text-orange { color: #f59e0b; }
 .text-primary { color: #6366F1; }
 .text-muted { color: #94a3b8; }
+.font-bold { font-weight: 700; }
+
+/* 彈窗與表格 */
+.table-wrapper { width: 100%; overflow-x: auto; }
+.empty-dialog { padding: 20px 0; }
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
@@ -219,6 +299,6 @@ onMounted(() => {
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/CashflowView.vue
-V: 1793988000
+V: 1794009000
 W: ai-wa-fs-002
 ═══ -->
