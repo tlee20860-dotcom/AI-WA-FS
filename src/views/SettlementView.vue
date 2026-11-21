@@ -15,11 +15,19 @@
         <!-- 1. 收入紀錄 -->
         <el-tab-pane label="收入紀錄" name="income">
           <div class="tab-content">
+            <div class="tool-bar">
+              <el-select v-model="incomeSort" size="small" style="width: 160px">
+                <el-option label="輸入時間 (新➜舊)" value="time_desc" />
+                <el-option label="輸入時間 (舊➜新)" value="time_asc" />
+                <el-option label="金額 (高➜低)" value="amount_desc" />
+                <el-option label="金額 (低➜高)" value="amount_asc" />
+              </el-select>
+            </div>
             <div v-if="rawIncomes.length === 0" class="empty-state">
               <el-empty description="尚無任何收入紀錄" :image-size="80" />
             </div>
             <div v-else class="table-wrapper">
-              <el-table :data="rawIncomes" style="width: 100%; min-width: 600px;" stripe>
+              <el-table :data="sortedIncomes" style="width: 100%; min-width: 600px;" stripe>
                 <el-table-column prop="year_month" label="月份" width="100" sortable />
                 <el-table-column prop="created_at" label="輸入日期" width="120">
                   <template #default="scope">
@@ -48,6 +56,12 @@
         <el-tab-pane label="支出事項" name="expense">
           <div class="tab-content">
             <div class="tool-bar">
+              <el-select v-model="expenseSort" size="small" style="width: 160px; margin-right: 10px;">
+                <el-option label="輸入時間 (新➜舊)" value="time_desc" />
+                <el-option label="輸入時間 (舊➜新)" value="time_asc" />
+                <el-option label="金額 (高➜低)" value="amount_desc" />
+                <el-option label="金額 (低➜高)" value="amount_asc" />
+              </el-select>
               <el-button type="warning" plain icon="MagicStick" :loading="importing" @click="importDialogVisible = true">
                 一鍵匯入固定支出
               </el-button>
@@ -56,7 +70,7 @@
               <el-empty description="尚無任何支出紀錄" :image-size="80" />
             </div>
             <div v-else class="table-wrapper">
-              <el-table :data="rawExpenses" style="width: 100%; min-width: 700px;" stripe>
+              <el-table :data="sortedExpenses" style="width: 100%; min-width: 700px;" stripe>
                 <el-table-column prop="year_month" label="月份" width="100" sortable />
                 <el-table-column prop="created_at" label="輸入日期" width="120">
                   <template #default="scope">
@@ -350,6 +364,10 @@ const policies = ref([])
 const members = ref([])
 const categories = ref([])
 
+// 排序狀態
+const incomeSort = ref('time_desc')
+const expenseSort = ref('time_desc')
+
 // 勾選與折疊狀態
 const selectedItems = ref([])
 const checkAll = ref(false)
@@ -376,11 +394,35 @@ const dialogTitle = computed(() => {
   return isEdit.value ? `編輯${typeName}` : `新增${typeName}`
 })
 
-// 🆕 格式化輸入日期
+// 格式化輸入日期
 const formatDate = (datetime) => {
   if (!datetime) return '-'
   return datetime.split('T')[0]
 }
+
+// 🆕 排序後的收入紀錄
+const sortedIncomes = computed(() => {
+  const list = [...rawIncomes.value]
+  return list.sort((a, b) => {
+    if (incomeSort.value === 'time_desc') return new Date(b.created_at) - new Date(a.created_at)
+    if (incomeSort.value === 'time_asc') return new Date(a.created_at) - new Date(b.created_at)
+    if (incomeSort.value === 'amount_desc') return Number(b.amount) - Number(a.amount)
+    if (incomeSort.value === 'amount_asc') return Number(a.amount) - Number(b.amount)
+    return 0
+  })
+})
+
+// 🆕 排序後的支出紀錄
+const sortedExpenses = computed(() => {
+  const list = [...rawExpenses.value]
+  return list.sort((a, b) => {
+    if (expenseSort.value === 'time_desc') return new Date(b.created_at) - new Date(a.created_at)
+    if (expenseSort.value === 'time_asc') return new Date(a.created_at) - new Date(b.created_at)
+    if (expenseSort.value === 'amount_desc') return Number(b.amount) - Number(a.amount)
+    if (expenseSort.value === 'amount_asc') return Number(a.amount) - Number(b.amount)
+    return 0
+  })
+})
 
 // 計算期數
 const getPeriodNumber = (startDateStr, targetYearMonth) => {
@@ -812,7 +854,7 @@ onMounted(() => fetchData())
 
 .main-card { border-radius: 20px; border: none; overflow: hidden; }
 .tab-content { padding-top: 10px; }
-.tool-bar { margin-bottom: 16px; display: flex; justify-content: flex-end; }
+.tool-bar { margin-bottom: 16px; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 
 /* 表格與折疊樣式 */
 .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -857,6 +899,6 @@ onMounted(() => fetchData())
 
 <!-- ═══ EOF ═══
 F: AI-WA-FS/src/views/SettlementView.vue
-V: 1794005000
+V: 1794011000
 W: ai-wa-fs-002
 ═══ -->
